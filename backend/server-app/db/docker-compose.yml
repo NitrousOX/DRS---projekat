@@ -1,0 +1,14 @@
+services:
+  db1-sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql_server
+    ports:
+      - "1433:1433" # Access via localhost:1433
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=09qfcj0q23rhcp0q239ur203h20392uc!!!!! # Must be complex
+    volumes:
+      - sql_data:/var/opt/mssql
+
+volumes:
+  sql_data: # Persists data even if container stops
