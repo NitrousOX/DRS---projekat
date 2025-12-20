@@ -1,0 +1,14 @@
+services:
+  db2-sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql_server_2
+    ports:
+      - "1434:1433" # Access via localhost:1434 (since 1433 is taken)
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Different_Password_987654321! # Keep it unique
+    volumes:
+      - sql_data_2:/var/opt/mssql
+
+volumes:
+  sql_data_2: # Unique volume name so it doesn't overwrite db1

@@ -1,63 +1,18 @@
-import os
-import pyodbc
-from flask import Flask, jsonify
-from dotenv import load_dotenv
+from flask import Flask
+from extensions import db, migrate, jwt
+from routes.auth_routes import auth_bp
+from routes.user_routes import user_bp
 
-load_dotenv()
+def create_app():
+    app = Flask(__name__)
+    app.config.from_object('config.Config')
 
-app = Flask(__name__)
+    db.init_app(app)
+    jwt.init_app(app)
+    migrate.init_app(app, db)
 
-def get_db_connection():
-    conn_str = (
-        "DRIVER={ODBC Driver 17 for SQL Server};"
-        f"SERVER={os.getenv('DB_HOST')},{os.getenv('DB_PORT')};"
-        f"DATABASE={os.getenv('DB_NAME')};"
-        f"UID={os.getenv('DB_USER')};"
-        f"PWD={os.getenv('DB_PASSWORD')};"
-    )
-    return pyodbc.connect(conn_str, timeout=5)
+    # Register blueprints with prefixes
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(user_bp, url_prefix='/api/users')
 
-@app.route("/health", methods=["GET"])
-def health():
-    return jsonify({
-        "status": "ok",
-        "service": "DRS backend",
-        "message": "Flask is running"
-    })
-
-@app.route("/db-health", methods=["GET"])
-def db_health():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT 1")
-        row = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
-
-        if row is None:
-            return jsonify({
-                "status": "error",
-                "database": "connected but query returned no rows"
-            }), 500
-
-        return jsonify({
-            "status": "ok",
-            "database": "connected",
-            "result": row[0]
-        })
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "database": "not connected",
-            "error": str(e)
-        }), 500
-
-if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=True
-    )
+    return app
