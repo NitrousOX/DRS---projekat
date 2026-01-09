@@ -75,7 +75,7 @@ export default function AppLayout() {
           </div>
 
           <nav style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <LinkItem to="/" label="Home" />
+            <LinkItem to="/quizzes" label="Quizzes" />
             <LinkItem to="/moderator/create" label="Create Quiz" />
             <LinkItem to="/admin/pending" label="Admin Pending" />
           </nav>
