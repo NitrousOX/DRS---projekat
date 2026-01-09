@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useToast } from "../../components/common/toast/ToastProvider";
+import { upsertLeaderboardRow } from "../../utils/leaderboardStorage";
+import Spinner from "../../components/common/ui/Spinner";
+import { getRole } from "../../utils/roleStorage";
 
 type Attempt = {
   attemptId: string;
@@ -33,15 +36,21 @@ export default function QuizProcessing() {
       }
     };
 
-    // initial
     setAttempt(read());
 
-    // poll
     const t = window.setInterval(() => {
       const a = read();
       if (!a) return;
       setAttempt(a);
+
       if (a.status === "DONE") {
+        upsertLeaderboardRow(a.quizId, {
+          name: getRole(),
+          score: a.score ?? 0,
+          timeSpentSeconds: a.timeSpentSeconds,
+          createdAt: Date.now(),
+        });
+
         toast.success("Rezultat je spreman.", "Gotovo");
         window.clearInterval(t);
       }
@@ -56,10 +65,10 @@ export default function QuizProcessing() {
 
   if (!attempt) {
     return (
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
+      <div className="page">
         <h1>Rezultat</h1>
         <p style={{ opacity: 0.7 }}>Nema attempt-a u storage-u. Pokreni kviz ponovo.</p>
-        <button onClick={() => navigate("/quizzes")} style={{ padding: "10px 14px", borderRadius: 12 }}>
+        <button className="btn" onClick={() => navigate("/quizzes")}>
           Nazad na kvizove
         </button>
       </div>
@@ -67,36 +76,41 @@ export default function QuizProcessing() {
   }
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
+    <div className="page">
       <h1 style={{ marginBottom: 6 }}>Rezultat: {attempt.quizTitle}</h1>
       <p style={{ opacity: 0.75, marginTop: 0 }}>
         Status: <strong>{attempt.status}</strong>
       </p>
 
-      <div
-        style={{
-          border: "1px solid rgba(255,255,255,0.12)",
-          background: "rgba(255,255,255,0.04)",
-          borderRadius: 16,
-          padding: 16,
-          marginTop: 14,
-        }}
-      >
-        <div>Utrošeno vreme: <strong>{attempt.timeSpentSeconds}s</strong></div>
+      <div className="card" style={{ marginTop: 14 }}>
+        <div>
+          Utrošeno vreme: <strong>{attempt.timeSpentSeconds}s</strong>
+        </div>
+
         {attempt.status === "DONE" && (
           <div style={{ marginTop: 8 }}>
             Bodovi (mock): <strong>{attempt.score ?? 0}</strong>
           </div>
         )}
+
         {attempt.status === "PROCESSING" && (
-          <div style={{ marginTop: 8, opacity: 0.75 }}>
-            Obrada traje… (mock polling)
+          <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", opacity: 0.85 }}>
+            <Spinner />
+            <span>Obrada traje…</span>
           </div>
         )}
       </div>
 
+      {attempt.status === "DONE" && (
+        <div style={{ marginTop: 16 }}>
+          <button className="btn btn--primary" onClick={() => navigate(`/results/${attemptId}/view`)}>
+            Prikaži rezultat
+          </button>
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-        <button onClick={() => navigate("/quizzes")} style={{ padding: "10px 14px", borderRadius: 12 }}>
+        <button className="btn" onClick={() => navigate("/quizzes")}>
           Nazad na kvizove
         </button>
       </div>

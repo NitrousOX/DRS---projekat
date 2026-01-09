@@ -5,7 +5,7 @@ export default function QuizList() {
   const navigate = useNavigate();
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
+    <div className="page">
       <h1 style={{ marginBottom: 8 }}>Dostupni kvizovi</h1>
       <p style={{ opacity: 0.7, marginTop: 0 }}>
         Ovo je mock lista. Kasnije ide API (samo APPROVED kvizovi).
@@ -15,17 +15,15 @@ export default function QuizList() {
         {quizzesMock.map((q) => (
           <div
             key={q.id}
+            className="card"
             style={{
-              border: "1px solid rgba(255,255,255,0.12)",
-              borderRadius: 16,
-              padding: 16,
-              background: "rgba(255,255,255,0.04)",
               display: "flex",
               justifyContent: "space-between",
               gap: 12,
               alignItems: "center",
             }}
           >
+
             <div>
               <div style={{ fontWeight: 800 }}>{q.title}</div>
               <div style={{ fontSize: 13, opacity: 0.7, marginTop: 6 }}>
@@ -34,11 +32,12 @@ export default function QuizList() {
             </div>
 
             <button
+              className="btn btn--primary"
               onClick={() => navigate(`/quizzes/${q.id}/play`)}
-              style={{ padding: "10px 14px", borderRadius: 12 }}
             >
               Start
             </button>
+
           </div>
         ))}
       </div>

@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { quizzesMock } from "../../mocks/quizzes.mock";
 import { useToast } from "../../components/common/toast/ToastProvider";
+import Modal from "../../components/common/ui/Modal";
+import Spinner from "../../components/common/ui/Spinner";
+
 
 type AnswerState = Record<string, string[]>; // questionId -> selected answerIds
 
@@ -25,6 +28,10 @@ export default function QuizPlay() {
   const [timeLeft, setTimeLeft] = useState<number>(quiz?.durationSeconds ?? 0);
   const [answers, setAnswers] = useState<AnswerState>({});
   const [submitting, setSubmitting] = useState(false);
+  const [confirmExitOpen, setConfirmExitOpen] = useState(false);
+  const dangerTime = timeLeft <= 10;
+
+
 
   const didAutoSubmitRef = useRef(false);
 
@@ -151,18 +158,25 @@ export default function QuizPlay() {
         </div>
 
         <div
-          style={{
-            border: "1px solid rgba(255,255,255,0.12)",
-            background: "rgba(255,255,255,0.04)",
-            borderRadius: 14,
-            padding: "10px 12px",
-            minWidth: 140,
-            textAlign: "right",
-          }}
-        >
-          <div style={{ fontSize: 12, opacity: 0.7 }}>Preostalo</div>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>{formatTime(timeLeft)}</div>
-        </div>
+  style={{
+    border: dangerTime
+      ? "1px solid rgba(255,77,79,0.45)"
+      : "1px solid rgba(255,255,255,0.12)",
+    background: dangerTime
+      ? "rgba(255,77,79,0.12)"
+      : "rgba(255,255,255,0.04)",
+    borderRadius: 14,
+    padding: "10px 12px",
+    minWidth: 140,
+    textAlign: "right",
+  }}
+>
+  <div style={{ fontSize: 12, opacity: 0.7 }}>Preostalo</div>
+  <div style={{ fontSize: 20, fontWeight: 800 }}>
+    {formatTime(timeLeft)}
+  </div>
+</div>
+
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 18 }}>
@@ -213,7 +227,8 @@ export default function QuizPlay() {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
         <button
           type="button"
-          onClick={() => navigate("/quizzes")}
+          onClick={() => setConfirmExitOpen(true)}
+
           disabled={submitting}
           style={{ padding: "10px 14px", borderRadius: 12 }}
         >
@@ -221,14 +236,46 @@ export default function QuizPlay() {
         </button>
 
         <button
-          type="button"
-          onClick={() => submit(false)}
-          disabled={submitting}
-          style={{ padding: "10px 14px", borderRadius: 12 }}
+        type="button"
+        onClick={() => submit(false)}
+        disabled={submitting}
+        style={{ padding: "10px 14px", borderRadius: 12 }}
         >
-          {submitting ? "Šaljem..." : "Submit"}
+        {submitting ? (
+            <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+            <Spinner size={16} />
+            Šaljem...
+            </span>
+        ) : (
+            "Submit"
+        )}
         </button>
+
       </div>
+      <Modal
+        open={confirmExitOpen}
+        title="Napusti kviz?"
+        onClose={() => setConfirmExitOpen(false)}
+        footer={
+            <>
+            <button
+                onClick={() => setConfirmExitOpen(false)}
+                style={{ padding: "10px 14px", borderRadius: 12 }}
+            >
+                Nastavi
+            </button>
+            <button
+                onClick={() => navigate("/quizzes")}
+                style={{ padding: "10px 14px", borderRadius: 12 }}
+            >
+                Napusti
+            </button>
+            </>
+        }
+        >
+        Imaš neposlate odgovore. Ako napustiš kviz, izgubićeš trenutni pokušaj.
+        </Modal>
+
     </div>
   );
 }

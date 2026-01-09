@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
-
-
+import { useEffect, useState } from "react";
+import RoleSwitch from "../../components/common/ui/RoleSwitch";
+import { canSee, getRole } from "../../utils/roleStorage";
 
 const linkBase: React.CSSProperties = {
   padding: "10px 12px",
@@ -14,21 +15,28 @@ const linkBase: React.CSSProperties = {
 function LinkItem({ to, label }: { to: string; label: string }) {
   return (
     <NavLink
-  to={to}
-  style={({ isActive }) => ({
-    ...linkBase,
-    borderColor: isActive ? "rgba(59,130,246,0.55)" : "rgba(255,255,255,0.12)",
-    background: isActive ? "rgba(59,130,246,0.18)" : "rgba(255,255,255,0.04)",
-  })}
->
-  {label}
-</NavLink>
-
+      to={to}
+      style={({ isActive }) => ({
+        ...linkBase,
+        borderColor: isActive ? "rgba(59,130,246,0.55)" : "rgba(255,255,255,0.12)",
+        background: isActive ? "rgba(59,130,246,0.18)" : "rgba(255,255,255,0.04)",
+      })}
+    >
+      {label}
+    </NavLink>
   );
 }
 
-
 export default function AppLayout() {
+  // ✅ hooks MORAJU biti unutar komponente
+  const [role, setRole] = useState(getRole());
+
+  useEffect(() => {
+    const onDevRoleChanged = () => setRole(getRole());
+    window.addEventListener("devRoleChanged", onDevRoleChanged);
+    return () => window.removeEventListener("devRoleChanged", onDevRoleChanged);
+  }, []);
+
   return (
     <div style={{ minHeight: "100vh" }}>
       <header
@@ -74,11 +82,22 @@ export default function AppLayout() {
             </div>
           </div>
 
-          <nav style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <LinkItem to="/quizzes" label="Quizzes" />
-            <LinkItem to="/moderator/create" label="Create Quiz" />
-            <LinkItem to="/admin/pending" label="Admin Pending" />
-          </nav>
+          {/* ✅ nav + role switch zajedno */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <nav style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <LinkItem to="/quizzes" label="Quizzes" />
+
+              {canSee(role, "moderator") && (
+                <LinkItem to="/moderator/create" label="Create Quiz" />
+              )}
+
+              {canSee(role, "admin") && (
+                <LinkItem to="/admin/pending" label="Admin Pending" />
+              )}
+            </nav>
+
+            <RoleSwitch />
+          </div>
         </div>
       </header>
 

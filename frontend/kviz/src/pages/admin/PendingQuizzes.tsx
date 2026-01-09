@@ -5,7 +5,7 @@ export default function PendingQuizzes() {
   const navigate = useNavigate();
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
+    <div className="page">
       <h1>Pending kvizovi</h1>
       <p style={{ opacity: 0.7 }}>
         Kvizovi koji čekaju odobrenje administratora.
@@ -15,15 +15,11 @@ export default function PendingQuizzes() {
         {pendingQuizzesMock.map((q) => (
           <div
             key={q.id}
+            className="card"
             onClick={() => navigate(`/admin/pending/${q.id}`)}
-            style={{
-              cursor: "pointer",
-              padding: 16,
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "rgba(255,255,255,0.04)",
-            }}
+            style={{ cursor: "pointer" }}
           >
+
             <div style={{ fontWeight: 600 }}>{q.title}</div>
             <div style={{ fontSize: 13, opacity: 0.7, marginTop: 6 }}>
               Autor: {q.authorName} · {q.questionsCount} pitanja ·{" "}

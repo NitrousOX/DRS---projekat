@@ -7,6 +7,9 @@ import QuizReview from "./pages/admin/QuizReview";
 import QuizList from "./pages/quizzes/QuizList";
 import QuizPlay from "./pages/quizzes/QuizPlay";
 import QuizProcessing from "./pages/quizzes/QuizProcessing";
+import QuizResult from "./pages/quizzes/QuizResult";
+import Leaderboard from "./pages/quizzes/Leaderboard";
+
 
 
 
@@ -21,6 +24,8 @@ export default function App() {
         <Route path="/quizzes" element={<QuizList />} />
         <Route path="/quizzes/:id/play" element={<QuizPlay />} />
         <Route path="/results/:attemptId" element={<QuizProcessing />} />
+        <Route path="/results/:attemptId/view" element={<QuizResult />} />
+        <Route path="/quizzes/:id/leaderboard" element={<Leaderboard />} />
 
 
         {/* Moderator */}
