@@ -6,12 +6,12 @@ class UserService:
     def __init__(self):
         self.repo = UserRepository()
 
-
     def get_profile(self, user_id):
         user = self.repo.get_by_id(user_id)
         if not user:
             return ApiResponse("User not found", StatusCodes.NOT_FOUND)
         
+        # Mapping model to a dictionary for JSON serialization
         user_data = {
             "first_name": user.first_name,
             "last_name": user.last_name,
@@ -31,24 +31,26 @@ class UserService:
         if not user:
             return ApiResponse("User not found", StatusCodes.NOT_FOUND)
 
+        # Protection: Fields the user is NOT allowed to change via this endpoint
+        protected_fields = ['id', 'email', 'password_hash', 'role']
+
         for key, value in update_data.items():
-            if hasattr(user, key) and key not in ['id', 'email', 'password_hash', 'role']:
+            if hasattr(user, key) and key not in protected_fields:
                 setattr(user, key, value)
         
         self.repo.save(user)
         return ApiResponse("Profile updated successfully", StatusCodes.SUCCESS)
 
-
     def get_all_users(self):
         users = self.repo.get_all()
-        output = []
-        for u in users:
-            output.append({
+        output = [
+            {
                 "id": u.id,
                 "full_name": f"{u.first_name} {u.last_name}",
                 "email": u.email,
                 "role": u.role
-            })
+            } for u in users
+        ]
         return ApiResponse(output, StatusCodes.SUCCESS)
 
     def delete_user(self, user_id):
@@ -71,8 +73,4 @@ class UserService:
 
         user.role = target_role
         self.repo.save(user)
-
-        # TODO: Trigger Email Notification here
-        # self.email_service.send_role_change_notification(user.email, target_role)
-
         return ApiResponse(f"User role updated to {target_role}", StatusCodes.SUCCESS)
