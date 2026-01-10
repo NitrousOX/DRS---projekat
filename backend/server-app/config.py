@@ -24,6 +24,10 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+# Set to None to remove Flask-level upload limits
+    MAX_CONTENT_LENGTH = None 
+    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads/profiles')
+
 # Auth / Security rules
     MAX_FAILED_LOGINS = 3
     LOCK_TIME_MINUTES = 1  # testing

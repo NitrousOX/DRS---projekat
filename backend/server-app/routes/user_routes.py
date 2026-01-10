@@ -31,7 +31,7 @@ def delete_my_account():
 
 # --- ADMIN ROUTES ---
 
-@user_bp.route('/users', methods=['GET'])
+@user_bp.route('/', methods=['GET'])
 @admin_required 
 def list_users():
     response = user_service.get_all_users()

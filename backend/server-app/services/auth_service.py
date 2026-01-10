@@ -10,12 +10,10 @@ class AuthService:
         self.repo = UserRepository()
 
     def register_user(self, data):
-# BASIC VALIDATION
         required = ['email', 'password', 'first_name', 'last_name']
         if not all(k in data for k in required) or not data['email'] or not data['password']:
             return ApiResponse("Missing required fields", StatusCodes.BAD_REQUEST)
 
-        # Basic Email Regex
         if not re.match(r"[^@]+@[^@]+\.[^@]+", data['email']):
             return ApiResponse("Invalid email format", StatusCodes.BAD_REQUEST)
 
@@ -25,16 +23,25 @@ class AuthService:
         if self.repo.get_by_email(data['email']):
             return ApiResponse("User with this email already exists", StatusCodes.CONFLICT)
 
-        password = data.pop('password') 
+        password = data.pop('password')
+        
+        if 'birth_date' in data and isinstance(data['birth_date'], str):
+            try:
+                # Assuming format 'YYYY-MM-DD' from the frontend
+                data['birth_date'] = datetime.strptime(data['birth_date'], '%Y-%m-%d').date()
+            except ValueError:
+                return ApiResponse("Invalid date format. Use YYYY-MM-DD", StatusCodes.BAD_REQUEST)
 
         try:
             new_user = User(**data) 
             new_user.set_password(password)
-            new_user.role = Role.PLAYER.value # Ensure role is set
+            new_user.role = Role.PLAYER.value
             
             self.repo.save(new_user)
             return ApiResponse("User registered successfully", StatusCodes.SUCCESS)
+            
         except TypeError as e:
+            # This usually happens if 'data' has a key that doesn't exist in the User model
             return ApiResponse(f"Data mapping error: {str(e)}", StatusCodes.BAD_REQUEST)
 
     def login_user(self, email, password):

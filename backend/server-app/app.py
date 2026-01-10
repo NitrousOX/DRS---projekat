@@ -1,5 +1,5 @@
 from flask import Flask
-from extensions import db, migrate, jwt
+from extensions import db, migrate, jwt, mail
 from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
 
@@ -9,6 +9,7 @@ def create_app():
 
     db.init_app(app)
     jwt.init_app(app)
+    mail.init_app(app)
     migrate.init_app(app, db)
 
     # Register blueprints with prefixes
