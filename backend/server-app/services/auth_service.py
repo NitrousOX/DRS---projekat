@@ -3,12 +3,25 @@ from flask_jwt_extended import create_access_token
 from models.user import User, Role
 from repo.user_repo import UserRepository
 from utils.ApiResponse import ApiResponse, StatusCodes
+import re
 
 class AuthService:
     def __init__(self):
         self.repo = UserRepository()
 
     def register_user(self, data):
+# BASIC VALIDATION
+        required = ['email', 'password', 'first_name', 'last_name']
+        if not all(k in data for k in required) or not data['email'] or not data['password']:
+            return ApiResponse("Missing required fields", StatusCodes.BAD_REQUEST)
+
+        # Basic Email Regex
+        if not re.match(r"[^@]+@[^@]+\.[^@]+", data['email']):
+            return ApiResponse("Invalid email format", StatusCodes.BAD_REQUEST)
+
+        if len(data['password']) < 6:
+            return ApiResponse("Password must be at least 6 characters", StatusCodes.BAD_REQUEST)
+
         if self.repo.get_by_email(data['email']):
             return ApiResponse("User with this email already exists", StatusCodes.CONFLICT)
 
@@ -25,6 +38,9 @@ class AuthService:
             return ApiResponse(f"Data mapping error: {str(e)}", StatusCodes.BAD_REQUEST)
 
     def login_user(self, email, password):
+        if not email or not password:
+            return ApiResponse("Email and password are required", StatusCodes.BAD_REQUEST)
+
         user = self.repo.get_by_email(email)
 
         # 1. Check if user exists

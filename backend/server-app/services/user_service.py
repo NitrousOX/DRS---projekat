@@ -27,12 +27,18 @@ class UserService:
         return ApiResponse(user_data, StatusCodes.SUCCESS)
 
     def update_profile(self, user_id, update_data):
+        if not update_data:
+            return ApiResponse("No data provided for update", StatusCodes.BAD_REQUEST)
+
         user = self.repo.get_by_id(user_id)
         if not user:
             return ApiResponse("User not found", StatusCodes.NOT_FOUND)
 
-        # Protection: Fields the user is NOT allowed to change via this endpoint
         protected_fields = ['id', 'email', 'password_hash', 'role']
+
+        # BASIC VALIDATION: Prevent clearing names
+        if 'first_name' in update_data and not update_data['first_name'].strip():
+            return ApiResponse("First name cannot be empty", StatusCodes.BAD_REQUEST)
 
         for key, value in update_data.items():
             if hasattr(user, key) and key not in protected_fields:
@@ -62,6 +68,9 @@ class UserService:
         return ApiResponse("User account deleted", StatusCodes.SUCCESS)
 
     def change_user_role(self, user_id, new_role_name):
+        if not new_role_name:
+            return ApiResponse("Role name is required", StatusCodes.BAD_REQUEST)
+
         user = self.repo.get_by_id(user_id)
         if not user:
             return ApiResponse("User not found", StatusCodes.NOT_FOUND)
