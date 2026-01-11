@@ -1,5 +1,6 @@
 from extensions import db
 from models.quiz import Quiz, Question, Answer, QuizResult
+from sqlalchemy import asc, desc
 
 class QuizRepository:
     
@@ -83,4 +84,18 @@ class QuizRepository:
     @staticmethod
     def has_correct_answer(question_id):
         return Answer.query.filter_by(question_id=question_id, is_correct=True).count() > 0
+    
+    @staticmethod
+    def get_leaderboard_for_quiz(quiz_id: int, limit: int = 10):
+        return (
+            QuizResult.query
+            .filter_by(quiz_id=quiz_id)
+            .order_by(
+                desc(QuizResult.score),
+                asc(QuizResult.time_spent_seconds),
+                asc(QuizResult.completed_at)
+            )
+            .limit(limit)
+            .all()
+        )
 
