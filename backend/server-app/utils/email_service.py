@@ -1,3 +1,11 @@
+from flask_mail import Message
+from extensions import mail
 
-def send_role_change_email(email, role):
-    print(f"[EMAIL] User {email} promoted to {role}")
+def send_rolechange_email(recipient_email, role):
+    msg = Message(
+        subject="User permission change",
+        recipients=[recipient_email],
+        body=f"Your role has been changed to: {role}"
+    )
+    # You can also use msg.html = "<b>HTML content here</b>"
+    mail.send(msg)

@@ -8,9 +8,8 @@ auth_service = AuthService()
 @auth_bp.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
-    # Marshmallow validation would happen here
     response = auth_service.register_user(data)
-    return jsonify(response.to_dict()), response.status_code
+    return jsonify(response.value), response.status_code
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
@@ -19,7 +18,7 @@ def login():
     password = data.get('password')
     
     response = auth_service.login_user(email, password)
-    return jsonify(response.to_dict()), response.status_code
+    return jsonify(response.value), response.status_code
 
 @auth_bp.route('/logout', methods=['POST'])
 @jwt_required()
@@ -27,4 +26,4 @@ def logout():
     # Get the unique identifier of the JWT to blocklist it
     jti = get_jwt()["jti"]
     response = auth_service.logout_user(jti)
-    return jsonify(response.to_dict()), response.status_code
+    return jsonify(response.value), response.status_code

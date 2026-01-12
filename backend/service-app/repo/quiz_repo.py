@@ -1,6 +1,6 @@
 from extensions import db
-from models.quiz import Quiz, Question, Answer, QuizResult, Ranking
-from sqlalchemy import desc
+from models.quiz import Quiz, Question, Answer, QuizResult
+from sqlalchemy import asc, desc
 
 class QuizRepository:
     
@@ -46,37 +46,7 @@ class QuizRepository:
     def get_user_results(user_id):
         return QuizResult.query.filter_by(user_id=user_id).all()
 
-    # --- RANKING / LEADERBOARD ---
-    @staticmethod
-    def get_top_rankings(limit=10):
-        """Returns users ordered by total_score descending"""
-        return Ranking.query.order_by(desc(Ranking.total_score)).limit(limit).all()
-
-    @staticmethod
-    def update_user_ranking(user_id, score_increment):
-        """
-        Updates an existing ranking or creates a new one 
-        when a user finishes a quiz.
-        """
-        # 1. Look for existing ranking record for this specific user
-        ranking = Ranking.query.filter_by(user_id=user_id).first()
-        
-        # 2. If the user has never played before, create a new record
-        if not ranking:
-            ranking = Ranking(
-                user_id=user_id, 
-                total_score=0, 
-                quizzes_completed=0
-            )
-            db.session.add(ranking)
-        
-        # 3. Increment the stats
-        ranking.total_score += score_increment
-        ranking.quizzes_completed += 1
-        
-        # 4. Commit the changes to the DB
-        db.session.commit()
-        return ranking
+    
 
     # --- ANSWER SPECIFIC METHODS ---
 
@@ -97,3 +67,35 @@ class QuizRepository:
         Useful for server-side validation.
         """
         return Answer.query.filter_by(question_id=question_id, is_correct=True).first()
+    
+    # --- VALIDATION METHODS ---
+    @staticmethod
+    def get_questions_for_quiz(quiz_id):
+        return Question.query.filter_by(quiz_id=quiz_id).all()
+
+    @staticmethod
+    def count_questions_for_quiz(quiz_id):
+        return Question.query.filter_by(quiz_id=quiz_id).count()
+
+    @staticmethod
+    def count_answers_for_question(question_id):
+        return Answer.query.filter_by(question_id=question_id).count()
+
+    @staticmethod
+    def has_correct_answer(question_id):
+        return Answer.query.filter_by(question_id=question_id, is_correct=True).count() > 0
+    
+    @staticmethod
+    def get_leaderboard_for_quiz(quiz_id: int, limit: int = 10):
+        return (
+            QuizResult.query
+            .filter_by(quiz_id=quiz_id)
+            .order_by(
+                desc(QuizResult.score),
+                asc(QuizResult.time_spent_seconds),
+                asc(QuizResult.completed_at)
+            )
+            .limit(limit)
+            .all()
+        )
+
