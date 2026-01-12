@@ -1,5 +1,6 @@
 services:
   db2-sql:
+    platform: linux/amd64
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: mssql_server_2
     ports:
