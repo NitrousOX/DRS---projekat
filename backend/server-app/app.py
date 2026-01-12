@@ -25,8 +25,6 @@ def create_app():
 
     # --- INIT SOCKETIO ---
     socketio.init_app(app)
-    import socket_handlers
-
     
 
     return app
