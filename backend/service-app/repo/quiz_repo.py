@@ -1,6 +1,7 @@
 from extensions import db
 from models.quiz import Quiz, Question, Answer, QuizResult
 from sqlalchemy import asc, desc
+from sqlalchemy.orm import joinedload
 
 class QuizRepository:
     
@@ -98,4 +99,15 @@ class QuizRepository:
             .limit(limit)
             .all()
         )
+    
+    @staticmethod
+    def get_all_quizzes_full():
+        return (
+            Quiz.query
+            .options(
+                joinedload(Quiz.questions).joinedload(Question.answers)
+            )
+            .all()
+        )
+
 

@@ -19,6 +19,28 @@ def create_quiz():
         "status": quiz.status
     }), 201
 
+@quiz_bp.route("/quizzes", methods=["GET"])
+def list_quizzes():
+    include = request.args.get("include", "summary")
+
+    if include == "full":
+        quizzes = QuizRepository.get_all_quizzes_full()
+        return jsonify([
+            q.to_dict(
+                include_questions=True,
+                include_answers=True,
+                include_correct=True
+            )
+            for q in quizzes
+        ]), 200
+
+    quizzes = QuizRepository.get_all_quizzes()
+    return jsonify([
+        q.to_dict(include_questions=False)
+        for q in quizzes
+    ]), 200
+
+
 @quiz_bp.route("/quizzes/<int:quiz_id>/submit", methods=["POST"])
 def submit_quiz(quiz_id: int):
     try:

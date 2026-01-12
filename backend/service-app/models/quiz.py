@@ -48,6 +48,25 @@ class Quiz(db.Model):
         cascade="all, delete-orphan"
     )
 
+    def to_dict(self, include_questions=True, include_answers=True, include_correct=True):
+        data = {
+            "id": self.id,
+            "title": self.title,
+            "status": self.status,
+            "duration_seconds": self.duration_seconds,
+            "author_id": self.author_id,
+            "rejection_reason": self.rejection_reason,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if getattr(self, "updated_at", None) else None,
+        }
+        if include_questions:
+            data["questions"] = [
+                q.to_dict(include_answers=include_answers, include_correct=include_correct)
+                for q in self.questions
+            ]
+        return data
+
+
 class Question(db.Model):
     __tablename__ = 'questions'
 
@@ -64,6 +83,17 @@ class Question(db.Model):
         cascade="all, delete-orphan"
     )
 
+    def to_dict(self, include_answers=True, include_correct=True):
+        data = {
+            "id": self.id,
+            "text": self.text,
+            "points": self.points
+        }
+        if include_answers:
+            data["answers"] = [a.to_dict(include_correct=include_correct) for a in self.answers]
+        return data
+
+
 class Answer(db.Model):
     __tablename__ = 'answers'
 
@@ -72,6 +102,16 @@ class Answer(db.Model):
 
     text = db.Column(db.String(255), nullable=False)
     is_correct = db.Column(db.Boolean, default=False, nullable=False)
+    
+    def to_dict(self, include_correct=True):
+        data = {
+            "id": self.id,
+            "text": self.text
+        }
+        if include_correct:
+            data["is_correct"] = self.is_correct
+        return data
+
 
 class QuizResult(db.Model):
     __tablename__ = 'quiz_results'
