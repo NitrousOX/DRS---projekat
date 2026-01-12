@@ -29,6 +29,22 @@ def delete_my_account():
     response = user_service.delete_user(user_id)
     return jsonify(response.value), response.status_code
 
+@user_bp.route('/profile/image', methods=['POST'])
+@jwt_required()
+def upload_image():
+    user_id = get_jwt_identity()
+    
+    # Check if the 'file' key is in the request
+    if 'file' not in request.files:
+        return jsonify({"message": "No file part in the request"}), 400
+        
+    file = request.files['file']
+    
+    # Call your service method
+    response = user_service.update_profile_image(user_id, file)
+    
+    return jsonify(response.value), response.status_code
+
 # --- ADMIN ROUTES ---
 
 @user_bp.route('/', methods=['GET'])

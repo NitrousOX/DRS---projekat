@@ -8,7 +8,6 @@ auth_service = AuthService()
 @auth_bp.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
-    # Marshmallow validation would happen here
     response = auth_service.register_user(data)
     return jsonify(response.value), response.status_code
 
