@@ -18,6 +18,7 @@ flask-socketio = "*"
 python-socketio = {extras = ["client"], version = "*"}
 requests = "*"
 reportlab = "*"
+flask-cors = "*"
 
 [dev-packages]
 

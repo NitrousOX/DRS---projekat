@@ -1,4 +1,5 @@
 from flask import Flask
+from flask_cors import CORS
 from extensions import db, migrate, jwt
 
 from models.quiz import Quiz, Question, Answer, QuizResult
@@ -8,6 +9,9 @@ from routes.question_routes import question_bp
 def create_app():
     app = Flask(__name__)
     app.config.from_object('config.Config')
+    
+    
+    CORS(app)
 
     db.init_app(app)
     jwt.init_app(app)

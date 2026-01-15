@@ -1,4 +1,5 @@
 from flask import Flask
+from flask_cors import CORS
 from extensions import db, migrate, jwt, socketio, mail
 from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
@@ -10,6 +11,8 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object('config.Config')
 
+    CORS(app)
+    
     # --- INIT EXTENSIONS ---
     db.init_app(app)
     jwt.init_app(app)
@@ -24,7 +27,7 @@ def create_app():
 
 
     # --- INIT SOCKETIO ---
-    socketio.init_app(app)
+    socketio.init_app(app, cors_allowed_origins="*")
     
 
     return app

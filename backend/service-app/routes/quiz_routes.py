@@ -12,7 +12,7 @@ quiz_bp = Blueprint("quiz_bp", __name__)
 def create_quiz():
     data = request.get_json()
 
-    quiz = QuizRepository.create_quiz(data)
+    quiz = QuizRepository.save_quiz(data)
 
     return jsonify({
         "id": quiz.id,
