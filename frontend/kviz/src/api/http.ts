@@ -1,6 +1,6 @@
 // src/api/http.ts
 
-type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 type FetchOptions = {
   method?: HttpMethod;
@@ -8,22 +8,19 @@ type FetchOptions = {
   headers?: Record<string, string>;
 };
 
-// ================= CORE REQUEST (JSON) =================
-
-async function request<T>(
+// ---------- core JSON request ----------
+async function requestJson<T>(
   url: string,
   { method = "GET", body, headers }: FetchOptions = {}
 ): Promise<T> {
   const finalHeaders: Record<string, string> = { ...(headers ?? {}) };
 
-  // ✅ Content-Type SAMO ako postoji body (sprečava OPTIONS preflight)
-  if (body !== undefined) {
-    finalHeaders["Content-Type"] = "application/json";
-  }
+  // Content-Type samo kad ima body
+  if (body !== undefined) finalHeaders["Content-Type"] = "application/json";
 
   const res = await fetch(url, {
     method,
-    credentials: "include", // HttpOnly cookie
+    credentials: "include",
     headers: finalHeaders,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -49,8 +46,7 @@ async function request<T>(
   return data as T;
 }
 
-// ================= FORM DATA (UPLOAD) =================
-
+// ---------- form-data request ----------
 async function requestForm<T>(
   url: string,
   method: HttpMethod,
@@ -60,10 +56,7 @@ async function requestForm<T>(
   const res = await fetch(url, {
     method,
     credentials: "include",
-    headers: {
-      ...(headers ?? {}),
-      // ❌ NE stavljati Content-Type — browser postavlja boundary
-    },
+    headers: { ...(headers ?? {}) }, // ne setovati Content-Type
     body: form,
   });
 
@@ -88,73 +81,39 @@ async function requestForm<T>(
   return data as T;
 }
 
-// ================= AUTH / MAIN API (ISTI ORIGIN) =================
+// ---------- client factory ----------
+function createClient(baseUrl?: string) {
+  const withBase = (url: string) => (baseUrl ? `${baseUrl}${url}` : url);
 
-export const authHttp = {
-  get: <T>(url: string) => request<T>(url),
+  return {
+    get: <T>(url: string) => requestJson<T>(withBase(url)),
+    post: <T>(url: string, body?: any) =>
+      requestJson<T>(withBase(url), { method: "POST", body }),
+    put: <T>(url: string, body?: any) =>
+      requestJson<T>(withBase(url), { method: "PUT", body }),
+    patch: <T>(url: string, body?: any) =>
+      requestJson<T>(withBase(url), { method: "PATCH", body }),
+    delete: <T>(url: string) =>
+      requestJson<T>(withBase(url), { method: "DELETE" }),
 
-  post: <T>(url: string, body?: any) =>
-    request<T>(url, { method: "POST", body }),
+    postForm: <T>(url: string, form: FormData, headers?: Record<string, string>) =>
+      requestForm<T>(withBase(url), "POST", form, headers),
+    putForm: <T>(url: string, form: FormData, headers?: Record<string, string>) =>
+      requestForm<T>(withBase(url), "PUT", form, headers),
+  };
+}
 
-  put: <T>(url: string, body?: any) =>
-    request<T>(url, { method: "PUT", body }),
+// =====================================================
+//  EXPORTI (jasno, bez konfuzije)
+// =====================================================
 
-  patch: <T>(url: string, body?: any) =>
-    request<T>(url, { method: "PATCH", body }),
+// 1) ISTI ORIGIN (Vite proxy / ili backend na istom domenu) – ne diramo login flow
+// 1) ISTI ORIGIN (login, logout, profile ako ide preko proxy-ja)
+export const authHttp = createClient();
 
-  delete: <T>(url: string) =>
-    request<T>(url, { method: "DELETE" }),
+// 2) USERS/ADMIN backend (sad je na 5001)
+export const serverHttp = createClient("http://localhost:5001");
 
-  // uploads
-  postForm: <T>(url: string, form: FormData, headers?: Record<string, string>) =>
-    requestForm<T>(url, "POST", form, headers),
+// 3) QUIZ backend (takođe 5001)
+export const quizHttp = createClient("http://localhost:5001");
 
-  putForm: <T>(url: string, form: FormData, headers?: Record<string, string>) =>
-    requestForm<T>(url, "PUT", form, headers),
-};
-
-// ================= QUIZ SERVICE – BACKEND NA 5000 =================
-
-const QUIZ_BASE_5000 = "http://localhost:5000";
-
-export const quizHttp = {
-  get: <T>(url: string) => request<T>(`${QUIZ_BASE_5000}${url}`),
-
-  post: <T>(url: string, body?: any) =>
-    request<T>(`${QUIZ_BASE_5000}${url}`, { method: "POST", body }),
-
-  patch: <T>(url: string, body?: any) =>
-    request<T>(`${QUIZ_BASE_5000}${url}`, { method: "PATCH", body }),
-
-  delete: <T>(url: string) =>
-    request<T>(`${QUIZ_BASE_5000}${url}`, { method: "DELETE" }),
-
-  postForm: <T>(url: string, form: FormData, headers?: Record<string, string>) =>
-    requestForm<T>(`${QUIZ_BASE_5000}${url}`, "POST", form, headers),
-
-  putForm: <T>(url: string, form: FormData, headers?: Record<string, string>) =>
-    requestForm<T>(`${QUIZ_BASE_5000}${url}`, "PUT", form, headers),
-};
-
-// ================= QUIZ SERVICE – BACKEND NA 5001 =================
-
-const QUIZ_BASE_5001 = "http://localhost:5001";
-
-export const quizHttp5001 = {
-  get: <T>(url: string) => request<T>(`${QUIZ_BASE_5001}${url}`),
-
-  post: <T>(url: string, body?: any) =>
-    request<T>(`${QUIZ_BASE_5001}${url}`, { method: "POST", body }),
-
-  patch: <T>(url: string, body?: any) =>
-    request<T>(`${QUIZ_BASE_5001}${url}`, { method: "PATCH", body }),
-
-  delete: <T>(url: string) =>
-    request<T>(`${QUIZ_BASE_5001}${url}`, { method: "DELETE" }),
-
-  postForm: <T>(url: string, form: FormData, headers?: Record<string, string>) =>
-    requestForm<T>(`${QUIZ_BASE_5001}${url}`, "POST", form, headers),
-
-  putForm: <T>(url: string, form: FormData, headers?: Record<string, string>) =>
-    requestForm<T>(`${QUIZ_BASE_5001}${url}`, "PUT", form, headers),
-};

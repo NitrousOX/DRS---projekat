@@ -6,25 +6,24 @@ type UserRow = {
   id: number;
   full_name: string;
   email: string;
-  role: string; // backend ti vraća npr. ADMIN ili IGRAC
+  role: string; // ADMIN | MODERATOR | PLAYER
 };
 
-function toApiRole(roleFromApi: string): Role {
+type UserUiRow = UserRow & { apiRole: Role };
+
+function normalizeApiRole(roleFromApi: string): Role {
   const r = (roleFromApi ?? "").toUpperCase();
   if (r === "ADMIN") return "ADMIN";
   if (r === "MODERATOR") return "MODERATOR";
-  if (r === "PLAYER") return "PLAYER";
-  if (r === "IGRAC") return "PLAYER";
   return "PLAYER";
 }
 
-function labelRole(apiRole: Role) {
-  if (apiRole === "PLAYER") return "IGRAC";
-  return apiRole;
+function roleLabel(role: Role) {
+  return role === "PLAYER" ? "IGRAC" : role;
 }
 
 export default function UsersAdmin() {
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const [users, setUsers] = useState<UserUiRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -33,13 +32,29 @@ export default function UsersAdmin() {
   async function loadUsers() {
     setLoading(true);
     setError(null);
+
     try {
       const data = await authHttp.get<UserRow[]>("/api/users/");
-      setUsers(data);
+
+      if (!Array.isArray(data)) {
+        throw new Error("API nije vratio listu (array).");
+      }
+
+      setUsers(
+        data.map((u) => ({
+          ...u,
+          apiRole: normalizeApiRole(u.role),
+        }))
+      );
     } catch (e: any) {
+      setUsers([]);
       setError(
-        `Greška pri učitavanju. Status=${e?.status} ` +
-          (e?.data ? `Data=${JSON.stringify(e.data)}` : "")
+        `Greška pri učitavanju korisnika.\nStatus=${e?.status ?? "?"}\n` +
+          (e?.data
+            ? typeof e.data === "string"
+              ? e.data
+              : JSON.stringify(e.data)
+            : e?.message ?? "")
       );
     } finally {
       setLoading(false);
@@ -50,32 +65,21 @@ export default function UsersAdmin() {
     setError(null);
     setSavingId(id);
 
-    const prev = users.find((u) => u.id === id)?.role;
+    const prevRole = users.find((u) => u.id === id)?.apiRole ?? "PLAYER";
 
-    // optimistic update
-    setUsers((p) =>
-      p.map((u) => (u.id === id ? { ...u, role: labelRole(newRole) } : u))
-    );
+    setUsers((p) => p.map((u) => (u.id === id ? { ...u, apiRole: newRole } : u)));
 
     try {
-      // probaj bez slash pa sa slash
-      try {
-        await authHttp.patch<{ message: string }>(`/api/users/${id}/role`, {
-          role: newRole,
-        });
-      } catch {
-        await authHttp.patch<{ message: string }>(`/api/users/${id}/role/`, {
-          role: newRole,
-        });
-      }
+      await authHttp.patch(`/api/users/${id}/role`, { role: newRole });
     } catch (e: any) {
-      // revert
-      if (prev) {
-        setUsers((p) => p.map((u) => (u.id === id ? { ...u, role: prev } : u)));
-      }
+      setUsers((p) => p.map((u) => (u.id === id ? { ...u, apiRole: prevRole } : u)));
       setError(
-        `Ne mogu da promenim ulogu. Status=${e?.status} ` +
-          (e?.data ? `Data=${JSON.stringify(e.data)}` : "")
+        `Ne mogu da promenim ulogu.\nStatus=${e?.status ?? "?"}\n` +
+          (e?.data
+            ? typeof e.data === "string"
+              ? e.data
+              : JSON.stringify(e.data)
+            : e?.message ?? "")
       );
     } finally {
       setSavingId(null);
@@ -83,26 +87,22 @@ export default function UsersAdmin() {
   }
 
   async function deleteUser(id: number, email: string) {
-    if (!confirm(`Obrisati korisnika ${email} (ID: ${id})?`)) return;
+    if (!confirm(`Obrisati korisnika ${email}?`)) return;
 
     setError(null);
     setDeletingId(id);
 
     try {
-      // API: DELETE /api/users/<user_id>
-      try {
-        await authHttp.delete<{ message: string }>(`/api/users/${id}`);
-      } catch {
-        // fallback ako backend traži trailing slash
-        await authHttp.delete<{ message: string }>(`/api/users/${id}/`);
-      }
-
-      // remove locally
+      await authHttp.delete(`/api/users/${id}/`);
       setUsers((p) => p.filter((u) => u.id !== id));
     } catch (e: any) {
       setError(
-        `Ne mogu da obrišem korisnika. Status=${e?.status} ` +
-          (e?.data ? `Data=${JSON.stringify(e.data)}` : "")
+        `Ne mogu da obrišem korisnika.\nStatus=${e?.status ?? "?"}\n` +
+          (e?.data
+            ? typeof e.data === "string"
+              ? e.data
+              : JSON.stringify(e.data)
+            : e?.message ?? "")
       );
     } finally {
       setDeletingId(null);
@@ -117,13 +117,17 @@ export default function UsersAdmin() {
     <div style={{ maxWidth: 1100, margin: "24px auto", padding: 16 }}>
       <h2>Admin – Lista korisnika</h2>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+      <div style={{ marginBottom: 12 }}>
         <button onClick={loadUsers} disabled={loading}>
           {loading ? "Učitavanje..." : "Refresh"}
         </button>
       </div>
 
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
+      {error && <pre style={{ color: "crimson", whiteSpace: "pre-wrap" }}>{error}</pre>}
+
+      {loading && <p>Učitavanje...</p>}
+
+      {!loading && !error && users.length === 0 && <p>Nema korisnika.</p>}
 
       {!loading && users.length > 0 && (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -136,10 +140,8 @@ export default function UsersAdmin() {
               <th style={th}>Akcije</th>
             </tr>
           </thead>
-
           <tbody>
             {users.map((u) => {
-              const apiRole = toApiRole(u.role);
               const busy = savingId === u.id || deletingId === u.id;
 
               return (
@@ -150,29 +152,18 @@ export default function UsersAdmin() {
 
                   <td style={td}>
                     <select
-                      value={apiRole}
+                      value={u.apiRole}
                       disabled={busy}
                       onChange={(e) => updateRole(u.id, e.target.value as Role)}
                     >
-                      <option value="PLAYER">IGRAC</option>
-                      <option value="MODERATOR">MODERATOR</option>
-                      <option value="ADMIN">ADMIN</option>
+                      <option value="PLAYER">{roleLabel("PLAYER")}</option>
+                      <option value="MODERATOR">{roleLabel("MODERATOR")}</option>
+                      <option value="ADMIN">{roleLabel("ADMIN")}</option>
                     </select>
                   </td>
 
                   <td style={td}>
-                    <button
-                      onClick={() => deleteUser(u.id, u.email)}
-                      disabled={busy}
-                      style={{
-                        padding: "8px 10px",
-                        borderRadius: 10,
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        background: "rgba(220,38,38,0.15)",
-                        color: "rgba(255,255,255,0.9)",
-                        cursor: busy ? "not-allowed" : "pointer",
-                      }}
-                    >
+                    <button onClick={() => deleteUser(u.id, u.email)} disabled={busy}>
                       {deletingId === u.id ? "Brisanje..." : "Obriši"}
                     </button>
                   </td>
@@ -182,8 +173,6 @@ export default function UsersAdmin() {
           </tbody>
         </table>
       )}
-
-      {!loading && users.length === 0 && <p>Nema korisnika.</p>}
     </div>
   );
 }

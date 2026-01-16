@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { quizHttp5001 } from "../../api/http";
+import { quizHttp } from "../../api/http"; // ✅ 5001 (service-app)
 
 type QuizListItemDto = {
   id: string | number;
@@ -33,34 +33,38 @@ export default function QuizList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  async function load() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // može i ?include=summary ako backend to podržava
+      // const data = await quizHttp.get<QuizListItemDto[]>("/api/quizzes?include=summary");
+      const data = await quizHttp.get<QuizListItemDto[]>("/api/quizzes");
+
+      setRows(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      if (e?.status === 401) {
+        setError("Nisi ulogovan (cookie nedostaje). Uloguj se ponovo.");
+      } else {
+        const msg =
+          e?.data?.msg ||
+          e?.data?.message ||
+          e?.data?.error ||
+          (typeof e?.data === "string" ? e.data : null) ||
+          `Greška pri učitavanju (status: ${e?.status ?? "?"})`;
+        setError(msg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // probaj bez query parametara prvo
-        const data = await quizHttp5001.get<QuizListItemDto[]>("/api/quizzes");
-
-        if (!cancelled) setRows(Array.isArray(data) ? data : []);
-      } catch (e: any) {
-        if (!cancelled) {
-          if (e?.status === 401) {
-            setError("Nisi ulogovan (cookie nedostaje). Uloguj se ponovo.");
-          } else {
-            const msg =
-              e?.data?.msg ||
-              e?.data?.message ||
-              e?.data?.error ||
-              `Greška pri učitavanju (status: ${e?.status ?? "?"})`;
-            setError(msg);
-          }
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      if (!cancelled) await load();
     })();
 
     return () => {
@@ -69,6 +73,7 @@ export default function QuizList() {
   }, []);
 
   const quizzes = useMemo(() => {
+    // ako backend vraća i druge statuse, filtriraj APPROVED
     return rows.filter((q) => (q.status ? q.status === "APPROVED" : true));
   }, [rows]);
 
@@ -84,7 +89,12 @@ export default function QuizList() {
       {!loading && error && (
         <div className="card" style={{ border: "1px solid rgba(222,55,44,.35)", padding: 14 }}>
           <div style={{ fontWeight: 800, marginBottom: 6 }}>Nešto nije ok</div>
-          <div style={{ opacity: 0.85 }}>{error}</div>
+          <div style={{ opacity: 0.85, whiteSpace: "pre-wrap" }}>{error}</div>
+          <div style={{ marginTop: 10 }}>
+            <button className="btn" onClick={load}>
+              Pokušaj opet
+            </button>
+          </div>
         </div>
       )}
 
@@ -97,7 +107,12 @@ export default function QuizList() {
           <div
             key={String(q.id)}
             className="card"
-            style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              alignItems: "center",
+            }}
           >
             <div>
               <div style={{ fontWeight: 800 }}>{getTitle(q)}</div>

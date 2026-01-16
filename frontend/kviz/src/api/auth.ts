@@ -1,11 +1,18 @@
 // services/auth.ts
 import { authHttp } from "./http";
 
+type LoginResponse = {
+  token: string;
+  role: string;
+};
+
 export async function login(email: string, password: string) {
-  const res = await authHttp.post("/api/auth/login", { email, password });
-  localStorage.setItem("token", res.data.token);
-  localStorage.setItem("role", res.data.role);
-  return res.data;
+  const data = await authHttp.post<LoginResponse>("/api/auth/login", { email, password });
+
+  localStorage.setItem("token", data.token);
+  localStorage.setItem("role", data.role);
+
+  return data;
 }
 
 export async function register(data: {
@@ -19,13 +26,12 @@ export async function register(data: {
   street: string;
   street_number: string;
 }) {
-  const res = await authHttp.post("/api/auth/register", data);
-  return res.data;
+  // tip stavi po potrebi
+  return await authHttp.post("/api/auth/register", data);
 }
 
 export async function me() {
-  const res = await authHttp.get("/api/users/profile");
-  return res.data;
+  return await authHttp.get("/api/users/profile");
 }
 
 export async function logout() {
