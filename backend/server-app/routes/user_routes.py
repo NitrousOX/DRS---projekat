@@ -14,12 +14,16 @@ def get_my_profile():
     response = user_service.get_profile(user_id)
     return jsonify(response.value), response.status_code
 
-@user_bp.route('/profile', methods=['PUT'])
-@jwt_required()
-def update_my_profile():
+# In routes/user_routes.py
+
+@user_bp.route('/profile/upload-image', methods=['POST'])
+@jwt_required()  # This now checks the HTTP-only cookie
+def upload_profile_image():
     user_id = get_jwt_identity()
-    data = request.get_json()
-    response = user_service.update_profile(user_id, data)
+    if 'file' not in request.files:
+        return jsonify({"message": "No file part"}), 400
+    file = request.files['file']
+    response = user_service.upload_user_image(user_id, file)
     return jsonify(response.value), response.status_code
 
 @user_bp.route('/profile', methods=['DELETE'])
@@ -34,15 +38,10 @@ def delete_my_account():
 def upload_image():
     user_id = get_jwt_identity()
     
-    # Check if the 'file' key is in the request
     if 'file' not in request.files:
         return jsonify({"message": "No file part in the request"}), 400
-        
     file = request.files['file']
-    
-    # Call your service method
     response = user_service.update_profile_image(user_id, file)
-    
     return jsonify(response.value), response.status_code
 
 # --- ADMIN ROUTES ---

@@ -60,38 +60,43 @@ class UserService:
         }
         return ApiResponse(user_data, StatusCodes.SUCCESS)
 
-    def update_profile(self, user_id, update_data):
-        if not update_data:
-            return ApiResponse("No data provided for update", StatusCodes.BAD_REQUEST)
+# In services/user_service.py
+
+    def upload_user_image(self, user_id, file):
+        if not file or file.filename == '':
+            return ApiResponse("No file selected", StatusCodes.BAD_REQUEST)
 
         user = self.repo.get_by_id(user_id)
         if not user:
             return ApiResponse("User not found", StatusCodes.NOT_FOUND)
 
-        # Fields that should NEVER be changed via this endpoint
-        protected_fields = ['id', 'email', 'password_hash', 'role', 'created_at', 'failed_logins', 'locked_until']
+        # 1. Setup Upload Directory
+        from flask import current_app
+        upload_dir = current_app.config.get('UPLOAD_FOLDER', 'uploads/profiles')
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir)
 
-        # Validation: Prevent clearing names
-        if 'first_name' in update_data and not str(update_data['first_name']).strip():
-            return ApiResponse("First name cannot be empty", StatusCodes.BAD_REQUEST)
-        if 'last_name' in update_data and not str(update_data['last_name']).strip():
-            return ApiResponse("Last name cannot be empty", StatusCodes.BAD_REQUEST)
+        # 2. Secure Filename and Create Unique Path
+        original_filename = secure_filename(file.filename)
+        extension = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else 'jpg'
+        unique_name = f"user_{user_id}_{uuid.uuid4().hex}.{extension}"
+        file_path = os.path.join(upload_dir, unique_name)
 
-        # HANDLE DATE CONVERSION
-        if 'birth_date' in update_data and update_data['birth_date']:
-            try:
-                if isinstance(update_data['birth_date'], str):
-                    update_data['birth_date'] = datetime.strptime(update_data['birth_date'], '%Y-%m-%d').date()
-            except ValueError:
-                return ApiResponse("Invalid date format. Use YYYY-MM-DD", StatusCodes.BAD_REQUEST)
+        try:
+            # 3. Save file to filesystem
+            file.save(file_path)
+            
+            # 4. Update the user record in DB with the new path/filename
+            user.profile_image = unique_name
+            self.repo.save(user)
 
-        # Dynamic Update
-        for key, value in update_data.items():
-            if hasattr(user, key) and key not in protected_fields:
-                setattr(user, key, value)
-        
-        self.repo.save(user)
-        return ApiResponse("Profile updated successfully", StatusCodes.SUCCESS)
+            return ApiResponse({
+                "message": "Image uploaded successfully",
+                "image_path": unique_name
+            }, StatusCodes.SUCCESS)
+
+        except Exception as e:
+            return ApiResponse(f"Upload failed: {str(e)}", StatusCodes.INTERNAL_SERVER_ERROR)
 
     def get_all_users(self):
         users = self.repo.get_all()
