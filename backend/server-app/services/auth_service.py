@@ -46,33 +46,28 @@ class AuthService:
 
     def login_user(self, email, password):
         if not email or not password:
-            return ApiResponse("Email and password are required", StatusCodes.BAD_REQUEST)
+            return ApiResponse("Email and password are required", StatusCodes.BAD_REQUEST), None
 
         user = self.repo.get_by_email(email)
 
-        # 1. Check if user exists
         if not user:
-            return ApiResponse("Invalid credentials", StatusCodes.UNAUTHORIZED)
+            return ApiResponse("Invalid credentials", StatusCodes.UNAUTHORIZED), None
 
-        # 2. Check if account is locked
         if user.is_locked():
             remaining_time = (user.locked_until - datetime.now(timezone.utc)).seconds
-            return ApiResponse(f"Account locked. Try again in {remaining_time} seconds.", StatusCodes.FORBIDDEN)
+            return ApiResponse(f"Account locked. Try again in {remaining_time} seconds.", StatusCodes.FORBIDDEN), None
 
-        # 3. Verify password
         if user.check_password(password):
-            # Success: Reset failed attempts and generate token
             self.repo.reset_login_attempts(user)
             
-            # Add role to claims so frontend/backend can restrict access easily
             additional_claims = {"role": user.role}
             access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
             
-            return ApiResponse({"token": access_token, "role": user.role}, StatusCodes.SUCCESS)
+            # Return data for the body and the token for the cookie
+            return ApiResponse({"message": "Login successful", "role": user.role}, StatusCodes.SUCCESS), access_token
         else:
-            # Failure: Increment count and check for lockout
             self.repo.handle_failed_login(user)
-            return ApiResponse("Invalid credentials", StatusCodes.UNAUTHORIZED)
+            return ApiResponse("Invalid credentials", StatusCodes.UNAUTHORIZED), None
 
     def logout_user(self, jti):
         # In the controller, you'll extract the 'jti' (JWT ID) from the token

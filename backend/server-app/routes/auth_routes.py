@@ -1,6 +1,6 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, make_response
 from services.auth_service import AuthService
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import jwt_required, get_jwt, set_access_cookies, unset_jwt_cookies
 
 auth_bp = Blueprint('auth', __name__)
 auth_service = AuthService()
@@ -16,14 +16,22 @@ def login():
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
+    api_response, token = auth_service.login_user(email, password)
     
-    response = auth_service.login_user(email, password)
-    return jsonify(response.value), response.status_code
+    flask_resp = make_response(jsonify(api_response.value), api_response.status_code)
+    
+    if token:
+        set_access_cookies(flask_resp, token)
+        
+    return flask_resp
 
 @auth_bp.route('/logout', methods=['POST'])
 @jwt_required()
 def logout():
-    # Get the unique identifier of the JWT to blocklist it
     jti = get_jwt()["jti"]
-    response = auth_service.logout_user(jti)
-    return jsonify(response.value), response.status_code
+    api_response = auth_service.logout_user(jti)
+    
+    flask_resp = make_response(jsonify(api_response.value), api_response.status_code)
+    unset_jwt_cookies(flask_resp)
+    
+    return flask_resp
