@@ -7,17 +7,17 @@ import {
   type ReactNode,
 } from "react";
 import { authHttp } from "../../api/http";
+import type { Role } from "../../utils/roleStorage";
+
+// ================= TYPES =================
 
 type User = any;
 
-// Ako login endpoint vraća role/user u body (opciono)
-type LoginResponse = { role?: string; user?: User; message?: string };
-
-// ---------- API ----------
-async function apiLogin(email: string, password: string) {
-  // fetch wrapper vrati payload direktno (nema .data)
-  return authHttp.post<LoginResponse>("/api/auth/login", { email, password });
-}
+type LoginResponse = {
+  role?: string;
+  user?: User;
+  message?: string;
+};
 
 export type RegisterPayload = {
   email: string;
@@ -31,12 +31,36 @@ export type RegisterPayload = {
   street_number: string;
 };
 
+// ================= HELPERS =================
+
+function normalizeRole(value: any): Role | null {
+  if (value === "ADMIN" || value === "admin") return "ADMIN";
+  if (value === "MODERATOR" || value === "moderator") return "MODERATOR";
+  if (
+    value === "PLAYER" ||
+    value === "player" ||
+    value === "USER" ||
+    value === "user"
+  )
+    return "PLAYER";
+
+  return null;
+}
+
+// ================= API =================
+
+async function apiLogin(email: string, password: string) {
+  return authHttp.post<LoginResponse>("/api/auth/login", {
+    email,
+    password,
+  });
+}
+
 async function apiRegister(payload: RegisterPayload) {
   return authHttp.post<{ message: string }>("/api/auth/register", payload);
 }
 
 async function apiMe() {
-  // očekuj { role: "...", ... } ili šta već vraća tvoj backend
   return authHttp.get<User>("/api/users/profile");
 }
 
@@ -44,10 +68,11 @@ async function apiLogout() {
   return authHttp.post<{ message: string }>("/api/auth/logout");
 }
 
-// ---------- CONTEXT ----------
+// ================= CONTEXT =================
+
 type AuthState = {
   user: User | null;
-  role: string | null;
+  role: Role | null;
   loading: boolean;
   isAuthenticated: boolean;
 
@@ -61,28 +86,21 @@ const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [role, setRole] = useState<string | null>(localStorage.getItem("role"));
+  const [role, setRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const isAuthenticated = !!user; // istina dolazi od servera preko /profile
+  const isAuthenticated = !!user;
 
-  function setRolePersisted(r: string | null) {
-    setRole(r);
-    if (r) localStorage.setItem("role", r);
-    else localStorage.removeItem("role");
-  }
-
+  // ===== CLEAR AUTH (LOGOUT CORE) =====
   function clearAuth() {
     setUser(null);
-    setRolePersisted(null);
+    setRole(null);
   }
 
   async function refreshProfile() {
-    const u: any = await apiMe(); // ako cookie nije validan -> wrapper baci error (401)
+    const u: any = await apiMe(); // 401 → catch
     setUser(u);
-
-    // ako backend vraća role u profilu
-    if (u?.role) setRolePersisted(u.role);
+    setRole(normalizeRole(u?.role));
   }
 
   useEffect(() => {
@@ -107,28 +125,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login: async (email, password) => {
         const data = await apiLogin(email, password);
 
-        // opciono: ako login vrati role/user, možeš odmah setovati
         if (data?.user) setUser(data.user);
-        if (data?.role) setRolePersisted(data.role);
+        if (data?.role) setRole(normalizeRole(data.role));
 
-        // najsigurnije: uvek povuci /profile (server source of truth)
         await refreshProfile();
       },
 
       register: async (payload) => {
         await apiRegister(payload);
-        // auto-login posle registracije
         await apiLogin(payload.email, payload.password);
         await refreshProfile();
       },
 
       logout: async () => {
         try {
-          await apiLogout(); // backend briše cookie
+          await apiLogout(); // backend briše HttpOnly cookie
         } catch {
           // ignoriši
         } finally {
-          clearAuth();
+          clearAuth(); // ← OVO TE IZLOGUJE
         }
       },
 
@@ -137,11 +152,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, role, loading, isAuthenticated]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth mora biti unutar <AuthProvider>.");
+  if (!ctx) {
+    throw new Error("useAuth mora biti unutar <AuthProvider>");
+  }
   return ctx;
 }

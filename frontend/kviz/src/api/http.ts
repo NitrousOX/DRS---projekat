@@ -19,7 +19,7 @@ async function request<T>(
       "Content-Type": "application/json",
       ...headers,
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   let data: any = null;
@@ -42,20 +42,44 @@ async function request<T>(
   return data as T;
 }
 
+// ================= AUTH / MAIN API =================
+
 export const authHttp = {
   get: <T>(url: string) => request<T>(url),
+
   post: <T>(url: string, body?: any) =>
     request<T>(url, { method: "POST", body }),
+
   put: <T>(url: string, body?: any) =>
     request<T>(url, { method: "PUT", body }),
+
+  patch: <T>(url: string, body?: any) =>
+    request<T>(url, { method: "PATCH", body }),
+
   delete: <T>(url: string) =>
     request<T>(url, { method: "DELETE" }),
 };
 
-// ako ti treba poseban backend (npr. kviz servis)
+// ================= QUIZ SERVICE (DRUGI BACKEND) =================
+
 export const quizHttp = {
   get: <T>(url: string) =>
     request<T>(`http://localhost:5000${url}`),
+
   post: <T>(url: string, body?: any) =>
-    request<T>(`http://localhost:5000${url}`, { method: "POST", body }),
+    request<T>(`http://localhost:5000${url}`, {
+      method: "POST",
+      body,
+    }),
+
+  patch: <T>(url: string, body?: any) =>
+    request<T>(`http://localhost:5000${url}`, {
+      method: "PATCH",
+      body,
+    }),
+
+  delete: <T>(url: string) =>
+    request<T>(`http://localhost:5000${url}`, {
+      method: "DELETE",
+    }),
 };

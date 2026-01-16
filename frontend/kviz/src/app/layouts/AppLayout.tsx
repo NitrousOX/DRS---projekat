@@ -63,6 +63,7 @@ export default function AppLayout() {
             gap: 12,
           }}
         >
+          {/* леви део (logo + naslov) */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div
               style={{
@@ -88,7 +89,7 @@ export default function AppLayout() {
             </div>
           </div>
 
-          {/* nav + user info + logout */}
+          {/* десни део (nav + user + logout) */}
           <div
             style={{
               display: "flex",
@@ -101,12 +102,20 @@ export default function AppLayout() {
             <nav style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <LinkItem to="/quizzes" label="Quizzes" />
 
+              {/* ✅ svi ulogovani vide Profile */}
+              <LinkItem to="/profile" label="Profile" />
+
+              {/* MODERATOR */}
               {role && canSee(role, "moderator") && (
                 <LinkItem to="/moderator/create" label="Create Quiz" />
               )}
 
+              {/* ADMIN */}
               {role && canSee(role, "admin") && (
-                <LinkItem to="/admin/pending" label="Admin Pending" />
+                <>
+                  <LinkItem to="/admin/users" label="Users" />
+                  <LinkItem to="/admin/pending" label="Admin Pending" />
+                </>
               )}
             </nav>
 
