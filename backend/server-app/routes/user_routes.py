@@ -1,4 +1,5 @@
-from flask import Blueprint, request, jsonify
+import os
+from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from services.user_service import UserService
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from utils.decorators import admin_required
@@ -25,6 +26,17 @@ def upload_profile_image():
     file = request.files['file']
     response = user_service.upload_user_image(user_id, file)
     return jsonify(response.value), response.status_code
+
+@user_bp.route('/profile/image/<filename>', methods=['GET'])
+def get_profile_image(filename):
+    upload_dir = current_app.config.get('UPLOAD_FOLDER', 'static/uploads/profiles')
+    file_path = os.path.join(upload_dir, filename)
+
+    if not os.path.exists(file_path):
+        # Return a placeholder image if the requested file doesn't exist
+        return send_from_directory('static/assets', 'default-avatar.png')
+
+    return send_from_directory(upload_dir, filename)
 
 @user_bp.route('/profile', methods=['DELETE'])
 @jwt_required()
