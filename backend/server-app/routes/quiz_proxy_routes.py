@@ -1,7 +1,7 @@
 import os
 import requests
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from extensions import socketio
 
 quiz_proxy_bp = Blueprint("quiz_proxy_bp", __name__)
@@ -54,3 +54,22 @@ def list_quizzes_proxy():
 
     return jsonify(data), 200
 
+@quiz_proxy_bp.route("/quizzes", methods=["POST"])
+@jwt_required()
+def create_quiz_proxy():
+    # ko je ulogovan
+    user_id = get_jwt_identity()
+    claims = get_jwt()
+    role = claims.get("role")
+
+    # samo MODERATOR/ADMIN sme da kreira
+    if role not in ["MODERATOR", "ADMIN"]:
+        return jsonify({"error": "Forbidden"}), 403
+
+    data = request.get_json() or {}
+
+    # author_id se setuje ovde (backend), front ne šalje
+    data["author_id"] = user_id
+
+    r = requests.post(f"{QUIZ_SERVICE_URL}/api/quizzes", json=data)
+    return jsonify(r.json()), r.status_code
