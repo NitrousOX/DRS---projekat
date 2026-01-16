@@ -8,21 +8,35 @@ type FetchOptions = {
   headers?: Record<string, string>;
 };
 
-async function requestJson<T>(
+function isFormData(x: any): x is FormData {
+  return typeof FormData !== "undefined" && x instanceof FormData;
+}
+
+async function request<T>(
   url: string,
   { method = "GET", body, headers }: FetchOptions = {}
 ): Promise<T> {
   const finalHeaders: Record<string, string> = { ...(headers ?? {}) };
 
-  if (body !== undefined) {
-    finalHeaders["Content-Type"] = "application/json";
+  let finalBody: BodyInit | undefined = undefined;
+
+  if (body !== undefined && body !== null) {
+    if (isFormData(body)) {
+      // ✅ multipart/form-data
+      // ⚠️ NE postavljaj Content-Type ručno (browser dodaje boundary)
+      finalBody = body;
+    } else {
+      // ✅ JSON
+      finalHeaders["Content-Type"] = "application/json";
+      finalBody = JSON.stringify(body);
+    }
   }
 
   const res = await fetch(url, {
     method,
     credentials: "include", // 🔑 JWT cookie
     headers: finalHeaders,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: finalBody,
   });
 
   const text = await res.text();
@@ -46,17 +60,40 @@ async function requestJson<T>(
   return data as T;
 }
 
-function createClient() {
+function createClient(defaultHeaders?: Record<string, string>) {
   return {
-    get: <T>(url: string) => requestJson<T>(url),
-    post: <T>(url: string, body?: any) =>
-      requestJson<T>(url, { method: "POST", body }),
-    patch: <T>(url: string, body?: any) =>
-      requestJson<T>(url, { method: "PATCH", body }),
-    put: <T>(url: string, body?: any) =>
-      requestJson<T>(url, { method: "PUT", body }),
-    delete: <T>(url: string) =>
-      requestJson<T>(url, { method: "DELETE" }),
+    get: <T>(url: string, headers?: Record<string, string>) =>
+      request<T>(url, {
+        method: "GET",
+        headers: { ...(defaultHeaders ?? {}), ...(headers ?? {}) },
+      }),
+
+    post: <T>(url: string, body?: any, headers?: Record<string, string>) =>
+      request<T>(url, {
+        method: "POST",
+        body,
+        headers: { ...(defaultHeaders ?? {}), ...(headers ?? {}) },
+      }),
+
+    patch: <T>(url: string, body?: any, headers?: Record<string, string>) =>
+      request<T>(url, {
+        method: "PATCH",
+        body,
+        headers: { ...(defaultHeaders ?? {}), ...(headers ?? {}) },
+      }),
+
+    put: <T>(url: string, body?: any, headers?: Record<string, string>) =>
+      request<T>(url, {
+        method: "PUT",
+        body,
+        headers: { ...(defaultHeaders ?? {}), ...(headers ?? {}) },
+      }),
+
+    delete: <T>(url: string, headers?: Record<string, string>) =>
+      request<T>(url, {
+        method: "DELETE",
+        headers: { ...(defaultHeaders ?? {}), ...(headers ?? {}) },
+      }),
   };
 }
 

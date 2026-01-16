@@ -19,6 +19,7 @@ python-socketio = {extras = ["client"], version = "*"}
 requests = "*"
 reportlab = "*"
 flask-cors = "*"
+colorama = "*"
 
 [dev-packages]
 
