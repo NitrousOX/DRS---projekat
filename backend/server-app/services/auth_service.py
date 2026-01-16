@@ -19,6 +19,9 @@ class AuthService:
 
         if len(data['password']) < 6:
             return ApiResponse("Password must be at least 6 characters", StatusCodes.BAD_REQUEST)
+        
+        exists = self.repo.get_by_email(data['email']) is not None
+        print("EMAIL EXISTS:", exists)
 
         if self.repo.get_by_email(data['email']):
             return ApiResponse("User with this email already exists", StatusCodes.CONFLICT)

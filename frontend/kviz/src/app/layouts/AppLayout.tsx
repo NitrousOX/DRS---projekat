@@ -1,7 +1,7 @@
-import { NavLink, Outlet } from "react-router-dom";
-import { useEffect, useState } from "react";
-import RoleSwitch from "../../components/common/ui/RoleSwitch";
-import { canSee, getRole } from "../../utils/roleStorage";
+import React from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import { canSee } from "../../utils/roleStorage";
 
 const linkBase: React.CSSProperties = {
   padding: "10px 12px",
@@ -18,8 +18,12 @@ function LinkItem({ to, label }: { to: string; label: string }) {
       to={to}
       style={({ isActive }) => ({
         ...linkBase,
-        borderColor: isActive ? "rgba(59,130,246,0.55)" : "rgba(255,255,255,0.12)",
-        background: isActive ? "rgba(59,130,246,0.18)" : "rgba(255,255,255,0.04)",
+        borderColor: isActive
+          ? "rgba(59,130,246,0.55)"
+          : "rgba(255,255,255,0.12)",
+        background: isActive
+          ? "rgba(59,130,246,0.18)"
+          : "rgba(255,255,255,0.04)",
       })}
     >
       {label}
@@ -28,14 +32,13 @@ function LinkItem({ to, label }: { to: string; label: string }) {
 }
 
 export default function AppLayout() {
-  // ✅ hooks MORAJU biti unutar komponente
-  const [role, setRole] = useState(getRole());
+  const nav = useNavigate();
+  const { user, role, logout } = useAuth();
 
-  useEffect(() => {
-    const onDevRoleChanged = () => setRole(getRole());
-    window.addEventListener("devRoleChanged", onDevRoleChanged);
-    return () => window.removeEventListener("devRoleChanged", onDevRoleChanged);
-  }, []);
+  async function handleLogout() {
+    await logout();
+    nav("/login", { replace: true });
+  }
 
   return (
     <div style={{ minHeight: "100vh" }}>
@@ -76,27 +79,59 @@ export default function AppLayout() {
             >
               Q
             </div>
+
             <div style={{ lineHeight: 1.1 }}>
               <div style={{ fontWeight: 800 }}>Kviz platforma</div>
-              <div style={{ fontSize: 12, opacity: 0.7 }}>DRS 2025/26</div>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>
+                DRS 2025/26{role ? ` • ${role}` : ""}
+              </div>
             </div>
           </div>
 
-          {/* ✅ nav + role switch zajedno */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          {/* nav + user info + logout */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
+            }}
+          >
             <nav style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <LinkItem to="/quizzes" label="Quizzes" />
 
-              {canSee(role, "moderator") && (
+              {role && canSee(role, "moderator") && (
                 <LinkItem to="/moderator/create" label="Create Quiz" />
               )}
 
-              {canSee(role, "admin") && (
+              {role && canSee(role, "admin") && (
                 <LinkItem to="/admin/pending" label="Admin Pending" />
               )}
             </nav>
 
-            <RoleSwitch />
+            {user && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>
+                  {(user?.email ?? user?.username ?? "User") as string}
+                </div>
+
+                <button
+                  onClick={handleLogout}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    background: "rgba(255,255,255,0.04)",
+                    color: "rgba(255,255,255,0.9)",
+                    cursor: "pointer",
+                    fontSize: 13,
+                  }}
+                >
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
