@@ -1,10 +1,16 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { leaderboardMock } from "../../mocks/leaderboard.mock";
-import { quizzesMock } from "../../mocks/quizzes.mock";
-import { readLeaderboard } from "../../utils/leaderboardStorage";
+import { quizzesMock } from "../../mocks/quizzes.mock"; // ovo može ostati dok ne imaš quiz details endpoint
 
+type LeaderboardRow = {
+  name: string;
+  score: number;
+  timeSpentSeconds: number;
+};
 
+type LeaderboardResponse = {
+  results: LeaderboardRow[];
+};
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -17,7 +23,59 @@ export default function Leaderboard() {
   const navigate = useNavigate();
 
   const quiz = useMemo(() => quizzesMock.find((q) => q.id === id), [id]);
-  const rows = id ? readLeaderboard(id) : [];
+
+  const [rows, setRows] = useState<LeaderboardRow[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const controller = new AbortController();
+
+    async function loadLeaderboard() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const limit = 10;
+
+        // Ako ti treba auth, otkomentariši i prilagodi key
+        const token = localStorage.getItem("token"); // npr: "accessToken"
+        const res = await fetch(`/api/quizzes/${id}/leaderboard?limit=${limit}`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          // pokušaj da izvučeš message iz body-ja
+          let msg = `Greška: ${res.status}`;
+          try {
+            const body = await res.json();
+            msg = body?.message || body?.detail || msg;
+          } catch {}
+          throw new Error(msg);
+        }
+
+        const data = (await res.json()) as LeaderboardResponse;
+        setRows(Array.isArray(data.results) ? data.results : []);
+      } catch (e: any) {
+        if (e?.name === "AbortError") return;
+        setError(e?.message ?? "Neuspešno učitavanje rang liste.");
+        setRows([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadLeaderboard();
+
+    return () => controller.abort();
+  }, [id]);
 
   if (!id || !quiz) {
     return (
@@ -45,7 +103,19 @@ export default function Leaderboard() {
           marginTop: 14,
         }}
       >
-        {rows.length === 0 ? (
+        {loading ? (
+          <p style={{ opacity: 0.7, margin: 0 }}>Učitavanje...</p>
+        ) : error ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            <p style={{ opacity: 0.85, margin: 0 }}>{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{ padding: "10px 14px", borderRadius: 12, width: "fit-content" }}
+            >
+              Pokušaj ponovo
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
           <p style={{ opacity: 0.7, margin: 0 }}>Nema rezultata još.</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -54,7 +124,7 @@ export default function Leaderboard() {
                 key={`${r.name}-${i}`}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "50px 1fr 120px 120px",
+                  gridTemplateColumns: "50px 1fr 120px 140px",
                   gap: 10,
                   alignItems: "center",
                   padding: "10px 12px",

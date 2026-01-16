@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./app/auth/AuthContext";
 import AppLayout from "./app/layouts/AppLayout";
+//import Home from "./pages/Home";
 
 // Public
 import Login from "./pages/Login";
