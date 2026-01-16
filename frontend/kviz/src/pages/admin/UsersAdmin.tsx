@@ -93,7 +93,7 @@ export default function UsersAdmin() {
     setDeletingId(id);
 
     try {
-      await authHttp.delete(`/api/users/${id}/`);
+      await authHttp.delete(`/api/users/${id}`);
       setUsers((p) => p.filter((u) => u.id !== id));
     } catch (e: any) {
       setError(

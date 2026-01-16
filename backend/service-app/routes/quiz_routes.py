@@ -10,9 +10,17 @@ quiz_bp = Blueprint("quiz_bp", __name__)
 
 @quiz_bp.route("/quizzes", methods=["POST"])
 def create_quiz():
-    data = request.get_json()
+    data = request.get_json() or {}
 
-    quiz = QuizRepository.save_quiz(data)
+    # napravi ORM objekat (NE dict)
+    quiz = Quiz(
+        title=data.get("title"),
+        duration_seconds=data.get("duration_seconds", 60),
+        status="DRAFT",   # ili pusti da model defaultuje na DRAFT
+        author_id=data.get("author_id")  # ako imate ovo polje
+    )
+
+    QuizRepository.save_quiz(quiz)  # save_quiz očekuje ORM model i to je OK
 
     return jsonify({
         "id": quiz.id,
