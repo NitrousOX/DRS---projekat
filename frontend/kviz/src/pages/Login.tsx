@@ -38,14 +38,14 @@ export default function Login() {
       if (err?.response?.status === 403) {
         setError(
           err?.response?.data?.message ??
-            "Too many failed attempts. Please wait 1 minute and try again."
+          "Too many failed attempts. Please wait 1 minute and try again."
         );
       } else {
         setError(
           err?.response?.data?.message ??
-            err?.response?.data?.detail ??
-            err?.message ??
-            "Login failed."
+          err?.response?.data?.detail ??
+          err?.message ??
+          "Login failed."
         );
       }
     } finally {

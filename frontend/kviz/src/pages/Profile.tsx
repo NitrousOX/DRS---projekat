@@ -5,117 +5,43 @@ import { useAuth } from "../app/auth/AuthContext";
 type ProfileForm = {
   first_name: string;
   last_name: string;
-  birth_date: string; // YYYY-MM-DD
+  birth_date: string;
   gender: string;
   country: string;
   street: string;
   street_number: string;
 };
 
-function pickStr(v: any) {
-  return typeof v === "string" ? v : "";
+function normalize(v: any) {
+  return String(v ?? "").trim();
 }
 
-function normalize(v: string) {
-  return (v ?? "").trim();
-}
-
-function extractFilename(v: any): string | null {
-  if (typeof v !== "string") return null;
-  const s = v.trim();
-  if (!s) return null;
-
-  const noQ = s.split("?")[0].split("#")[0];
-  const last = noQ.split("/").filter(Boolean).pop();
-  if (!last) return null;
-
-  return last.trim() || null;
-}
-
-function getUserImageFilename(u: any): string | null {
-  const candidates = [
-    u?.image_name,
-    u?.profile_image_name,
-    u?.avatar_name,
-    u?.picture_name,
-    u?.photo_name,
-
-    u?.avatar_url,
-    u?.avatar,
-    u?.profile_image_url,
-    u?.profile_image,
-    u?.image_url,
-    u?.image,
-    u?.photo_url,
-    u?.photo,
-    u?.picture_url,
-    u?.picture,
-  ];
-
-  for (const c of candidates) {
-    const fn = extractFilename(c);
-    if (fn) return fn;
-  }
-  return null;
-}
-
-function buildProfileImageUrl(filename: string, cacheBust?: string | number) {
-  const safe = encodeURIComponent(filename);
-  const v = cacheBust ? `?v=${encodeURIComponent(String(cacheBust))}` : "";
-  return `/api/users/profile/image/${safe}${v}`;
-}
-
-const PROFILE_ENDPOINT = "/api/users/profile";
-const PROFILE_IMAGE_UPLOAD_ENDPOINT = "/api/users/profile/image";
-const IMAGE_UPLOAD_FIELD = "file";
-
-// ✅ localStorage key (po user id/email, da ne meša korisnike)
-function imageKeyForUser(u: any) {
-  const id = u?.id ?? u?.user_id ?? u?.email ?? "me";
-  return `profile_image_name__${String(id)}`;
+function buildProfileImageUrl(filename: string, cacheBust: number) {
+  return `/api/users/profile/image/${encodeURIComponent(filename)}?v=${cacheBust}`;
 }
 
 export default function Profile() {
   const { user, refreshProfile } = useAuth();
 
-  const initial = useMemo<ProfileForm>(
-    () => ({
-      first_name: pickStr((user as any)?.first_name),
-      last_name: pickStr((user as any)?.last_name),
-      birth_date: pickStr((user as any)?.birth_date),
-      gender: pickStr((user as any)?.gender),
-      country: pickStr((user as any)?.country),
-      street: pickStr((user as any)?.street),
-      street_number: pickStr((user as any)?.street_number),
-    }),
-    [user]
-  );
+  const initial = useMemo<ProfileForm>(() => ({
+    first_name: normalize(user?.first_name),
+    last_name: normalize(user?.last_name),
+    birth_date: normalize(user?.birth_date),
+    gender: normalize(user?.gender),
+    country: normalize(user?.country),
+    street: normalize(user?.street),
+    street_number: normalize(user?.street_number),
+  }), [user]);
 
   const [form, setForm] = useState<ProfileForm>(initial);
-
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-
   const [avatarVersion, setAvatarVersion] = useState<number>(Date.now());
 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-
-  // ✅ local fallback filename (ako backend ne vraća image_name u profilu)
-  const [localImageName, setLocalImageName] = useState<string | null>(null);
-
-  // učitaj localStorage kad se user promeni
-  useEffect(() => {
-    try {
-      const key = imageKeyForUser(user);
-      const saved = localStorage.getItem(key);
-      setLocalImageName(extractFilename(saved));
-    } catch {
-      setLocalImageName(null);
-    }
-  }, [user]);
 
   useEffect(() => {
     setForm(initial);
@@ -131,67 +57,13 @@ export default function Profile() {
     return () => URL.revokeObjectURL(url);
   }, [avatarFile]);
 
-  function set<K extends keyof ProfileForm>(key: K, value: ProfileForm[K]) {
-    setForm((p) => ({ ...p, [key]: value }));
-  }
-
-  function clearAvatarSelection() {
-    setAvatarFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }
-
-  function onPickAvatar(file: File | null) {
-    setErr(null);
-    setMsg(null);
-
-    if (!file) {
-      clearAvatarSelection();
-      return;
+  const avatarToShow = useMemo(() => {
+    if (avatarPreview) return avatarPreview;
+    if (user?.profile_image) {
+      return buildProfileImageUrl(user.profile_image, avatarVersion);
     }
-
-    const okMime = ["image/jpeg", "image/png"];
-    const name = file.name.toLowerCase();
-    const okExt = name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png");
-
-    if (!okExt || (file.type && !okMime.includes(file.type))) {
-      clearAvatarSelection();
-      setErr("Dozvoljeni su samo .jpg/.jpeg i .png fajlovi.");
-      return;
-    }
-
-    const max = 5 * 1024 * 1024;
-    if (file.size > max) {
-      clearAvatarSelection();
-      setErr("Slika je prevelika. Max 5MB.");
-      return;
-    }
-
-    setAvatarFile(file);
-  }
-
-  async function uploadProfileImage(file: File): Promise<string> {
-    const fd = new FormData();
-    fd.append(IMAGE_UPLOAD_FIELD, file, file.name);
-
-    const res = await authHttp.post(PROFILE_IMAGE_UPLOAD_ENDPOINT, fd);
-    const data = (res as any)?.data ?? res;
-
-    const raw = data?.image_name ?? data?.filename ?? data?.file_name ?? data?.name;
-    const finalName = extractFilename(raw);
-
-    if (!finalName) throw new Error("Upload slike nije vratio image_name/filename.");
-    return finalName;
-  }
-
-  // ✅ imageName = iz user-a ili iz localStorage fallback-a
-  const imageName = useMemo(() => {
-    return getUserImageFilename(user) || localImageName;
-  }, [user, localImageName]);
-
-  const imageFromFilename = useMemo(() => {
-    if (!imageName) return null;
-    return buildProfileImageUrl(imageName, avatarVersion);
-  }, [imageName, avatarVersion]);
+    return null;
+  }, [avatarPreview, user?.profile_image, avatarVersion]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -200,158 +72,169 @@ export default function Profile() {
     setBusy(true);
 
     try {
-      const trimmed: ProfileForm = {
-        first_name: normalize(form.first_name),
-        last_name: normalize(form.last_name),
-        birth_date: normalize(form.birth_date),
-        gender: normalize(form.gender),
-        country: normalize(form.country),
-        street: normalize(form.street),
-        street_number: normalize(form.street_number),
-      };
+      if (avatarFile) {
+        const fd = new FormData();
+        fd.append("file", avatarFile);
+        await authHttp.post("/api/users/profile/image", fd);
+      }
 
-      const payload: Record<string, any> = Object.fromEntries(
-        Object.entries(trimmed).filter(([k, v]) => {
-          if (!v) return false;
-          const prev = normalize((initial as any)[k]);
-          return v !== prev;
-        })
+      const payload = Object.fromEntries(
+        Object.entries(form).filter(([k, v]) => normalize(v) !== initial[k as keyof ProfileForm])
       );
 
-      if (avatarFile) {
-        const newImageName = await uploadProfileImage(avatarFile);
-
-        // ⬇️ čak i ako backend ne pamti u profilu, mi ćemo ga lokalno zapamtiti
-        try {
-          const key = imageKeyForUser(user);
-          localStorage.setItem(key, newImageName);
-        } catch {}
-        setLocalImageName(newImageName);
-
-        // ako backend ipak očekuje da mu pošalješ image_name, šaljemo
-        payload.image_name = newImageName;
+      if (Object.keys(payload).length > 0) {
+        await authHttp.put("/api/users/profile", payload);
       }
 
-      if (Object.keys(payload).length === 0) {
-        setMsg("Nema izmena za snimanje.");
-        return;
-      }
+      setMsg("Profil je uspešno sačuvan.");
+      setAvatarFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
 
-      await authHttp.post(PROFILE_ENDPOINT, payload);
-
-      setMsg("Profile updated successfully");
-      clearAvatarSelection();
       await refreshProfile();
-
       setAvatarVersion(Date.now());
     } catch (e: any) {
-      setErr(
-        `Ne mogu da ažuriram profil. Status=${e?.status ?? "?"}\n` +
-          (e?.data
-            ? typeof e.data === "string"
-              ? e.data
-              : JSON.stringify(e.data)
-            : e?.message ?? "")
-      );
+      setErr(e?.data?.message || e?.message || "Greška pri čuvanju.");
     } finally {
       setBusy(false);
     }
   }
 
-  const avatarToShow = avatarPreview || imageFromFilename;
+  if (!user) return <div className="page" style={{ opacity: 0.7 }}>Učitavam profil...</div>;
 
   return (
-    <div style={{ maxWidth: 720, margin: "24px auto", padding: 16 }}>
-      <h2>Moj profil</h2>
+    <div className="page">
+      <h1 style={{ marginBottom: 8 }}>Moj Profil</h1>
+      <p style={{ opacity: 0.7, marginTop: 0 }}>
+        Upravljaj svojim ličnim podacima i profilnom slikom.
+      </p>
 
-      <form onSubmit={submit} style={{ display: "grid", gap: 10, marginTop: 12 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <div
-            style={{
-              width: 72,
-              height: 72,
-              borderRadius: 18,
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "rgba(255,255,255,0.06)",
-              overflow: "hidden",
-              display: "grid",
-              placeItems: "center",
-              fontSize: 12,
-              opacity: 0.9,
-            }}
-          >
+      <form onSubmit={submit} style={{ marginTop: 24, display: "grid", gap: 20 }}>
+
+        {/* Slika i Osnovno - Card stil */}
+        <div className="card" style={{ display: "flex", gap: 20, alignItems: "center" }}>
+          <div style={{
+            width: 100,
+            height: 100,
+            borderRadius: 16,
+            background: "rgba(255,255,255,0.05)",
+            overflow: "hidden",
+            border: "1px solid rgba(255,255,255,0.1)",
+            flexShrink: 0
+          }}>
             {avatarToShow ? (
-              <img
-                src={avatarToShow}
-                alt="avatar"
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                onError={() => {
-                  // Debug ako treba:
-                  // console.log("Image failed:", avatarToShow);
-                }}
-              />
+              <img src={avatarToShow} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             ) : (
-              "No image"
+              <div style={{ height: "100%", display: "grid", placeItems: "center", fontSize: 12, opacity: 0.5 }}>Bez slike</div>
             )}
           </div>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label style={{ fontSize: 12, opacity: 0.8 }}>Profilna slika</label>
-
+          <div style={{ display: "grid", gap: 8 }}>
+            <div style={{ fontWeight: 800 }}>Profilna fotografija</div>
             <input
-              ref={fileInputRef}
               type="file"
-              accept=".jpg,.jpeg,.png,image/jpeg,image/png"
-              onChange={(e) => onPickAvatar(e.target.files?.[0] ?? null)}
+              ref={fileInputRef}
+              accept="image/*"
+              className="btn"
+              style={{ fontSize: 12, padding: "6px 10px" }}
+              onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
             />
-
-            <div style={{ fontSize: 12, opacity: 0.65 }}>Dozvoljeno: .jpg/.jpeg, .png (max 5MB)</div>
           </div>
         </div>
 
-        <Field label="First name">
-          <input value={form.first_name} onChange={(e) => set("first_name", e.target.value)} />
-        </Field>
+        {/* Podaci - Card stil */}
+        <div className="card" style={{ display: "grid", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Ime">
+              <input
+                className="input"
+                value={form.first_name}
+                onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+              />
+            </Field>
+            <Field label="Prezime">
+              <input
+                className="input"
+                value={form.last_name}
+                onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+              />
+            </Field>
+          </div>
 
-        <Field label="Last name">
-          <input value={form.last_name} onChange={(e) => set("last_name", e.target.value)} />
-        </Field>
+          <Field label="Email adresa (povezana sa nalogom)">
+            <input className="input" value={user.email} disabled style={{ opacity: 0.5, cursor: "not-allowed" }} />
+          </Field>
 
-        <Field label="Birth date">
-          <input type="date" value={form.birth_date} onChange={(e) => set("birth_date", e.target.value)} />
-        </Field>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Datum rođenja">
+              <input
+                type="date"
+                className="input"
+                value={form.birth_date}
+                onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
+              />
+            </Field>
+            <Field label="Pol">
+              <input
+                className="input"
+                placeholder="M / Ž"
+                value={form.gender}
+                onChange={(e) => setForm({ ...form, gender: e.target.value })}
+              />
+            </Field>
+          </div>
+        </div>
 
-        <Field label="Gender">
-          <input value={form.gender} onChange={(e) => set("gender", e.target.value)} />
-        </Field>
+        {/* Adresa - Card stil */}
+        <div className="card" style={{ display: "grid", gap: 16 }}>
+          <Field label="Država">
+            <input
+              className="input"
+              value={form.country}
+              onChange={(e) => setForm({ ...form, country: e.target.value })}
+            />
+          </Field>
+          <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 12 }}>
+            <Field label="Ulica">
+              <input
+                className="input"
+                value={form.street}
+                onChange={(e) => setForm({ ...form, street: e.target.value })}
+              />
+            </Field>
+            <Field label="Broj">
+              <input
+                className="input"
+                value={form.street_number}
+                onChange={(e) => setForm({ ...form, street_number: e.target.value })}
+              />
+            </Field>
+          </div>
+        </div>
 
-        <Field label="Country">
-          <input value={form.country} onChange={(e) => set("country", e.target.value)} />
-        </Field>
+        {/* Statusne poruke */}
+        {msg && <div style={{ color: "#4ade80", fontSize: 14, fontWeight: 600 }}>{msg}</div>}
+        {err && <div style={{ color: "#f87171", fontSize: 14, fontWeight: 600 }}>{err}</div>}
 
-        <Field label="Street">
-          <input value={form.street} onChange={(e) => set("street", e.target.value)} />
-        </Field>
-
-        <Field label="Street number">
-          <input value={form.street_number} onChange={(e) => set("street_number", e.target.value)} />
-        </Field>
-
-        <button type="submit" disabled={busy} style={{ padding: 10, borderRadius: 12 }}>
-          {busy ? "Saving..." : "Save changes"}
+        <button
+          type="submit"
+          disabled={busy}
+          className="btn btn--primary"
+          style={{ padding: 14, fontSize: 16, fontWeight: 800 }}
+        >
+          {busy ? "Sakupljam podatke..." : "Sačuvaj izmene"}
         </button>
-
-        {msg && <p style={{ color: "lime" }}>{msg}</p>}
-        {err && <p style={{ color: "crimson", whiteSpace: "pre-wrap" }}>{err}</p>}
       </form>
     </div>
   );
 }
 
+// Pomoćna komponenta za labele
 function Field({ label, children }: { label: string; children: any }) {
   return (
     <label style={{ display: "grid", gap: 6 }}>
-      <span style={{ fontSize: 12, opacity: 0.8 }}>{label}</span>
+      <span style={{ fontSize: 12, opacity: 0.6, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+        {label}
+      </span>
       {children}
     </label>
   );
