@@ -8,15 +8,19 @@ import { mapDraftToCreateQuizDTO } from "../../utils/quizMapper";
 import { quizHttp, authHttp } from "../../api/http";
 
 type MeDto = {
-  id?: number;
+  id?: number; // možda ga nema
   role?: string; // "ADMIN" | "MODERATOR" | "PLAYER" (ili "IGRAC")
   email?: string;
 };
 
 type CreateQuizResponseDTO = {
   id: number | string;
-  status: string; // "DRAFT"
+  status: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
 };
+
+type CreateQuestionResponseDTO = { question_id: number };
+type CreateAnswerResponseDTO = { answer_id: number };
+type SubmitQuizResponseDTO = { id: number | string; status: "PENDING" };
 
 function normalizeRole(r?: string) {
   const x = (r || "").toUpperCase();
@@ -24,17 +28,62 @@ function normalizeRole(r?: string) {
   return x;
 }
 
+// --- Helpers za draft polja ---
+function qText(q: any): string {
+  return (q?.text ?? q?.question ?? q?.title ?? "").toString().trim();
+}
+function aText(a: any): string {
+  return (a?.text ?? a?.answer ?? a?.title ?? "").toString().trim();
+}
+function aIsCorrect(a: any): boolean {
+  return !!(a?.isCorrect ?? a?.is_correct ?? a?.correct ?? a?.is_true);
+}
+
+function validateDraft(draft: QuizDraft) {
+  const questions: any[] = (draft as any)?.questions ?? [];
+  if (!Array.isArray(questions) || questions.length < 1) {
+    throw new Error("Kviz mora imati bar 1 pitanje.");
+  }
+
+  questions.forEach((q, qi) => {
+    const qt = qText(q);
+    if (!qt) throw new Error(`Pitanje #${qi + 1} nema tekst.`);
+
+    const points = Number(q?.points);
+    if (!Number.isFinite(points) || points <= 0) {
+      throw new Error(`Pitanje #${qi + 1} mora imati broj bodova > 0.`);
+    }
+
+    const answers: any[] = q?.answers ?? [];
+    if (!Array.isArray(answers) || answers.length < 2) {
+      throw new Error(`Pitanje #${qi + 1} mora imati bar 2 ponuđena odgovora.`);
+    }
+
+    const anyCorrect = answers.some(aIsCorrect);
+    if (!anyCorrect) {
+      throw new Error(`Pitanje #${qi + 1} mora imati bar 1 tačan odgovor.`);
+    }
+
+    answers.forEach((a, ai) => {
+      const at = aText(a);
+      if (!at) throw new Error(`Pitanje #${qi + 1}, odgovor #${ai + 1} nema tekst.`);
+    });
+  });
+}
+
 export default function QuizCreate() {
   const navigate = useNavigate();
 
   const [meLoading, setMeLoading] = useState(true);
   const [meRole, setMeRole] = useState<string | null>(null);
+  const [meId, setMeId] = useState<number | null>(null); // može ostati null
 
   const [submitting, setSubmitting] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // ✅ role uzimamo sa backend-a, ne iz localStorage
   useEffect(() => {
     let cancelled = false;
 
@@ -46,16 +95,20 @@ export default function QuizCreate() {
         const me = await authHttp.get<MeDto>("/api/users/profile");
         const role = normalizeRole(me?.role);
 
-        if (!cancelled) setMeRole(role || null);
+        if (!cancelled) {
+          setMeRole(role || null);
+          setMeId(me?.id ?? null); // ako backend ne vraća id -> ostaje null i to je OK
+        }
       } catch (e: any) {
         if (!cancelled) {
           if (e?.status === 401) setError("Nisi ulogovan. Uloguj se ponovo.");
-          else
+          else {
             setError(
               e?.data?.message ||
                 (typeof e?.data === "string" ? e.data : null) ||
                 `Ne mogu da učitam profil (status: ${e?.status ?? "?"}).`
             );
+          }
         }
       } finally {
         if (!cancelled) setMeLoading(false);
@@ -67,25 +120,86 @@ export default function QuizCreate() {
     };
   }, []);
 
-  const canCreate = meRole === "MODERATOR" || meRole === "ADMIN"; // ako hoćeš i adminu da dozvoliš
+  const canCreate = meRole === "MODERATOR" || meRole === "ADMIN";
 
   async function handleSubmit(draft: QuizDraft) {
     setSubmitting(true);
     setError(null);
     setSuccessMsg(null);
+    setProgress(null);
 
     try {
-      const dto = mapDraftToCreateQuizDTO(draft);
+      if (!canCreate) throw new Error("Nemaš dozvolu. Samo MODERATOR/ADMIN može da kreira kviz.");
 
-      const res = await quizHttp.post<CreateQuizResponseDTO>(
-  "/api/quizzes",   // 👈 bez trailing slash-a
-  dto
-);
+      validateDraft(draft);
 
+      // 1) Create quiz
+      setProgress("Kreiram kviz...");
+      const dto: any = mapDraftToCreateQuizDTO(draft);
 
+      // ✅ author_id šaljemo samo ako ga imamo
+      // (ako backend može da ga izvuče iz JWT, ovo je idealno)
+      if (meId != null && dto.author_id == null) dto.author_id = meId;
 
+      let quizRes: CreateQuizResponseDTO;
+      try {
+        quizRes = await quizHttp.post<CreateQuizResponseDTO>("/api/quizzes", dto);
+      } catch (e: any) {
+        // Ako backend baš zahteva author_id, ovde će se najčešće vratiti 400.
+        const backendMsg =
+          e?.data?.message ||
+          e?.data?.msg ||
+          e?.data?.error ||
+          (typeof e?.data === "string" ? e.data : "");
 
-      setSuccessMsg(`Kviz kreiran (#${res.id}). Status: ${res.status}`);
+        if (
+          e?.status === 400 &&
+          /author_id/i.test(backendMsg || "") &&
+          meId == null
+        ) {
+          throw new Error(
+            'Backend zahteva "author_id", ali /api/users/profile ne vraća id. Reši tako što ćeš:\n' +
+              "1) na backendu uzeti author_id iz JWT-a (preporuka), ili\n" +
+              "2) proširiti /api/users/profile da vraća id."
+          );
+        }
+
+        throw e;
+      }
+
+      const quizId = quizRes.id;
+
+      // 2) Add questions + answers
+      const questions: any[] = (draft as any).questions;
+
+      for (let qi = 0; qi < questions.length; qi++) {
+        const q = questions[qi];
+        setProgress(`Dodajem pitanje ${qi + 1}/${questions.length}...`);
+
+        const qRes = await quizHttp.post<CreateQuestionResponseDTO>(
+          `/api/quizzes/${quizId}/questions`,
+          { text: qText(q), points: Number(q.points) }
+        );
+
+        const questionId = qRes.question_id;
+        const answers: any[] = q.answers;
+
+        for (let ai = 0; ai < answers.length; ai++) {
+          const a = answers[ai];
+          setProgress(`Dodajem odgovore (p${qi + 1}, o${ai + 1}/${answers.length})...`);
+
+          await quizHttp.post<CreateAnswerResponseDTO>(`/api/questions/${questionId}/answers`, {
+            text: aText(a),
+            is_correct: aIsCorrect(a),
+          });
+        }
+      }
+
+      // 3) Submit quiz -> PENDING
+      setProgress("Šaljem kviz na odobrenje (PENDING)...");
+      const submitRes = await quizHttp.post<SubmitQuizResponseDTO>(`/api/quizzes/${quizId}/submit`);
+
+      setSuccessMsg(`Kviz kreiran (#${quizId}). Status: ${submitRes.status}`);
     } catch (e: any) {
       if (e?.status === 401) {
         setError('Nisi ulogovan (cookie "access_token" nedostaje). Uloguj se ponovo.');
@@ -96,13 +210,15 @@ export default function QuizCreate() {
           e?.data?.msg ||
           e?.data?.message ||
           e?.data?.error ||
+          e?.message ||
           (typeof e?.data === "string" ? e.data : null) ||
-          `Greška pri kreiranju (status: ${e?.status ?? "?"})`;
+          `Greška (status: ${e?.status ?? "?"})`;
 
         setError(msg);
       }
     } finally {
       setSubmitting(false);
+      setProgress(null);
     }
   }
 
@@ -120,6 +236,21 @@ export default function QuizCreate() {
           Nazad
         </button>
       </div>
+
+      {progress && (
+        <div
+          className="card"
+          style={{
+            border: "1px solid rgba(255,255,255,.12)",
+            padding: 14,
+            marginTop: 14,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          <div style={{ fontWeight: 800, marginBottom: 6 }}>U toku</div>
+          <div style={{ opacity: 0.9 }}>{progress}</div>
+        </div>
+      )}
 
       {error && (
         <div
@@ -179,7 +310,6 @@ export default function QuizCreate() {
         <QuizEditor
           onSubmit={handleSubmit}
           resetAfterSubmit={!!successMsg}
-          // ako tvoj QuizEditor nema ova props, ignoriši:
           // @ts-ignore
           disabled={submitting}
           // @ts-ignore
