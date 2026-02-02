@@ -50,11 +50,11 @@ export default function UsersAdmin() {
       setUsers([]);
       setError(
         `Greška pri učitavanju korisnika.\nStatus=${e?.status ?? "?"}\n` +
-          (e?.data
-            ? typeof e.data === "string"
-              ? e.data
-              : JSON.stringify(e.data)
-            : e?.message ?? "")
+        (e?.data
+          ? typeof e.data === "string"
+            ? e.data
+            : JSON.stringify(e.data)
+          : e?.message ?? "")
       );
     } finally {
       setLoading(false);
@@ -75,11 +75,11 @@ export default function UsersAdmin() {
       setUsers((p) => p.map((u) => (u.id === id ? { ...u, apiRole: prevRole } : u)));
       setError(
         `Ne mogu da promenim ulogu.\nStatus=${e?.status ?? "?"}\n` +
-          (e?.data
-            ? typeof e.data === "string"
-              ? e.data
-              : JSON.stringify(e.data)
-            : e?.message ?? "")
+        (e?.data
+          ? typeof e.data === "string"
+            ? e.data
+            : JSON.stringify(e.data)
+          : e?.message ?? "")
       );
     } finally {
       setSavingId(null);
@@ -98,11 +98,11 @@ export default function UsersAdmin() {
     } catch (e: any) {
       setError(
         `Ne mogu da obrišem korisnika.\nStatus=${e?.status ?? "?"}\n` +
-          (e?.data
-            ? typeof e.data === "string"
-              ? e.data
-              : JSON.stringify(e.data)
-            : e?.message ?? "")
+        (e?.data
+          ? typeof e.data === "string"
+            ? e.data
+            : JSON.stringify(e.data)
+          : e?.message ?? "")
       );
     } finally {
       setDeletingId(null);
@@ -163,8 +163,37 @@ export default function UsersAdmin() {
                   </td>
 
                   <td style={td}>
-                    <button onClick={() => deleteUser(u.id, u.email)} disabled={busy}>
-                      {deletingId === u.id ? "Brisanje..." : "Obriši"}
+                    <button
+                      onClick={() => deleteUser(u.id, u.email)}
+                      disabled={busy}
+                      className="group relative inline-flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200 active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
+                    >
+                      {deletingId === u.id ? (
+                        <>
+                          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          <span className="animate-pulse">Brisanje...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="w-3.5 h-3.5 transition-transform group-hover:-rotate-12"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2.5}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                          Obriši
+                        </>
+                      )}
                     </button>
                   </td>
                 </tr>

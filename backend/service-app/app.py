@@ -11,7 +11,7 @@ def create_app():
     app.config.from_object('config.Config')
     
     
-    CORS(app)
+    CORS(app, supports_credentials=True)
 
     db.init_app(app)
     jwt.init_app(app)

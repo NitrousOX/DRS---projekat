@@ -22,11 +22,8 @@ async function request<T>(
 
   if (body !== undefined && body !== null) {
     if (isFormData(body)) {
-      // ✅ multipart/form-data
-      // ⚠️ NE postavljaj Content-Type ručno (browser dodaje boundary)
       finalBody = body;
     } else {
-      // ✅ JSON
       finalHeaders["Content-Type"] = "application/json";
       finalBody = JSON.stringify(body);
     }

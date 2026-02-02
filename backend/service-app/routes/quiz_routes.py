@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify, request
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from services.quiz_service import QuizService
 from models.quiz import Question, Answer, QuizResult, Quiz
 from repo.quiz_repo import QuizRepository
@@ -7,17 +8,19 @@ from extensions import db
 
 quiz_bp = Blueprint("quiz_bp", __name__)
 
-
 @quiz_bp.route("/quizzes", methods=["POST"])
+@jwt_required()
 def create_quiz():
     data = request.get_json() or {}
+
+    current_user_id = get_jwt_identity()
 
     # napravi ORM objekat (NE dict)
     quiz = Quiz(
         title=data.get("title"),
         duration_seconds=data.get("duration_seconds", 60),
         status="DRAFT",   # ili pusti da model defaultuje na DRAFT
-        author_id=data.get("author_id")  # ako imate ovo polje
+        author_id= current_user_id
     )
 
     QuizRepository.save_quiz(quiz)  # save_quiz očekuje ORM model i to je OK

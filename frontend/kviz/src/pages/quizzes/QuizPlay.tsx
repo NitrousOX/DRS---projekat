@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { quizzesMock } from "../../mocks/quizzes.mock";
 import { useToast } from "../../components/common/toast/ToastProvider";
 import Modal from "../../components/common/ui/Modal";
 import Spinner from "../../components/common/ui/Spinner";
 
-
 type AnswerState = Record<string, string[]>; // questionId -> selected answerIds
+
+interface QuizData {
+  id: string;
+  title: string;
+  durationSeconds: number;
+  questions: Array<{
+    id: string;
+    text: string;
+    points: number;
+    multi: boolean;
+    answers: Array<{ id: string; text: string }>;
+  }>;
+}
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -19,33 +30,53 @@ function uid() {
 }
 
 export default function QuizPlay() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
 
-  const quiz = quizzesMock.find((q) => q.id === id);
-
-  const [timeLeft, setTimeLeft] = useState<number>(quiz?.durationSeconds ?? 0);
+  const [quiz, setQuiz] = useState<QuizData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [timeLeft, setTimeLeft] = useState<number>(0);
   const [answers, setAnswers] = useState<AnswerState>({});
   const [submitting, setSubmitting] = useState(false);
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
-  const dangerTime = timeLeft <= 10;
-
-
 
   const didAutoSubmitRef = useRef(false);
+  const dangerTime = timeLeft <= 10 && timeLeft > 0;
 
+  // 1. Fetch Quiz Data using native fetch from your specific endpoint
   useEffect(() => {
-    if (!quiz) return;
-    setTimeLeft(quiz.durationSeconds);
-    setAnswers({});
-    didAutoSubmitRef.current = false;
-  }, [quiz?.id]);
+    async function fetchQuiz() {
+      if (!id) return;
 
-  // Timer tick
+      try {
+        setLoading(true);
+        // Using port 5000 as requested
+        const response = await fetch(`http://127.0.0.1:5000/api/quizzes/${id}/full`);
+
+        if (!response.ok) {
+          throw new Error(`Greška: ${response.status}`);
+        }
+
+        const data: QuizData = await response.json();
+        setQuiz(data);
+        setTimeLeft(data.durationSeconds);
+        setAnswers({});
+        didAutoSubmitRef.current = false;
+      } catch (err) {
+        console.error("Fetch error:", err);
+        toast.error("Nije moguće učitati kviz sa servera.", "Greška");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchQuiz();
+  }, [id, toast]);
+
+  // 2. Timer Logic
   useEffect(() => {
-    if (!quiz) return;
-    if (submitting) return;
+    if (!quiz || submitting || loading) return;
 
     if (timeLeft <= 0) {
       if (!didAutoSubmitRef.current) {
@@ -58,8 +89,7 @@ export default function QuizPlay() {
 
     const t = window.setInterval(() => setTimeLeft((x) => x - 1), 1000);
     return () => window.clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, quiz?.id, submitting]);
+  }, [timeLeft, quiz, submitting, loading]);
 
   const totalQuestions = quiz?.questions.length ?? 0;
 
@@ -72,6 +102,66 @@ export default function QuizPlay() {
     return c;
   }, [answers, quiz]);
 
+  function toggleAnswer(questionId: string, answerId: string, multi: boolean) {
+    setAnswers((prev) => {
+      const current = prev[questionId] ?? [];
+      if (multi) {
+        const exists = current.includes(answerId);
+        const next = exists ? current.filter((x) => x !== answerId) : [...current, answerId];
+        return { ...prev, [questionId]: next };
+      } else {
+        return { ...prev, [questionId]: [answerId] };
+      }
+    });
+  }
+
+  async function submit(auto = false) {
+    if (!quiz || submitting) return;
+
+    const any = Object.values(answers).some((arr) => arr.length > 0);
+    if (!auto && !any) {
+      toast.error("Označi bar jedan odgovor pre slanja.", "Nema odgovora");
+      return;
+    }
+
+    setSubmitting(true);
+
+    const attemptId = uid();
+    const payload = {
+      attemptId,
+      quizId: quiz.id,
+      quizTitle: quiz.title,
+      durationSeconds: quiz.durationSeconds,
+      timeSpentSeconds: Math.max(0, quiz.durationSeconds - timeLeft),
+      answers,
+      startedAt: Date.now(),
+      status: "PROCESSING" as const,
+    };
+
+    localStorage.setItem(`attempt:${attemptId}`, JSON.stringify(payload));
+
+    // Mock processing delay
+    setTimeout(() => {
+      const done = {
+        ...payload,
+        status: "DONE" as const,
+        score: answeredCount * 10,
+      };
+      localStorage.setItem(`attempt:${attemptId}`, JSON.stringify(done));
+      toast.success("Odgovori poslati.", "Poslato");
+      navigate(`/results/${attemptId}`, { replace: true });
+    }, 2000);
+  }
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "50vh" }}>
+        <Spinner size={40} />
+        <p style={{ marginTop: 16 }}>Učitavanje kviza...</p>
+      </div>
+    );
+  }
+
   if (!quiz) {
     return (
       <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
@@ -82,70 +172,6 @@ export default function QuizPlay() {
       </div>
     );
   }
-
-  function toggleAnswer(questionId: string, answerId: string, multi: boolean) {
-    setAnswers((prev) => {
-      const current = prev[questionId] ?? [];
-      if (multi) {
-        const exists = current.includes(answerId);
-        const next = exists ? current.filter((x) => x !== answerId) : [...current, answerId];
-        return { ...prev, [questionId]: next };
-      } else {
-        // single choice
-        return { ...prev, [questionId]: [answerId] };
-      }
-    });
-  }
-
-  function validateBeforeSubmit() {
-    // Minimalno: dozvoljavamo submit i bez svih odgovora.
-    // Ali bar 1 odgovor je lep check.
-    const any = Object.values(answers).some((arr) => arr.length > 0);
-    if (!any) {
-      toast.error("Označi bar jedan odgovor pre slanja.", "Nema odgovora");
-      return false;
-    }
-    return true;
-  }
-
-  async function submit(auto = false) {
-  if (!quiz) return; // ✅ TypeScript guard
-  if (submitting) return;
-  if (!auto && !validateBeforeSubmit()) return;
-
-  setSubmitting(true);
-
-  const attemptId = uid();
-  const startedAt = Date.now();
-
-  const payload = {
-    attemptId,
-    quizId: quiz.id,
-    quizTitle: quiz.title,
-    durationSeconds: quiz.durationSeconds,
-    timeSpentSeconds: Math.max(0, quiz.durationSeconds - timeLeft),
-    answers,
-    startedAt,
-    status: "PROCESSING" as const,
-  };
-
-  localStorage.setItem(`attempt:${attemptId}`, JSON.stringify(payload));
-
-  // mock async processing
-  const delay = 3000 + Math.floor(Math.random() * 3000);
-  window.setTimeout(() => {
-    const done = {
-      ...payload,
-      status: "DONE" as const,
-      score: answeredCount * 10,
-    };
-    localStorage.setItem(`attempt:${attemptId}`, JSON.stringify(done));
-  }, delay);
-
-  toast.success("Odgovori poslati. Obrada je u toku.", "Poslato");
-  navigate(`/results/${attemptId}`, { replace: true });
-}
-
 
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
@@ -158,25 +184,20 @@ export default function QuizPlay() {
         </div>
 
         <div
-  style={{
-    border: dangerTime
-      ? "1px solid rgba(255,77,79,0.45)"
-      : "1px solid rgba(255,255,255,0.12)",
-    background: dangerTime
-      ? "rgba(255,77,79,0.12)"
-      : "rgba(255,255,255,0.04)",
-    borderRadius: 14,
-    padding: "10px 12px",
-    minWidth: 140,
-    textAlign: "right",
-  }}
->
-  <div style={{ fontSize: 12, opacity: 0.7 }}>Preostalo</div>
-  <div style={{ fontSize: 20, fontWeight: 800 }}>
-    {formatTime(timeLeft)}
-  </div>
-</div>
-
+          style={{
+            border: dangerTime ? "1px solid rgba(255,77,79,0.45)" : "1px solid rgba(255,255,255,0.12)",
+            background: dangerTime ? "rgba(255,77,79,0.12)" : "rgba(255,255,255,0.04)",
+            borderRadius: 14,
+            padding: "10px 12px",
+            minWidth: 140,
+            textAlign: "right",
+          }}
+        >
+          <div style={{ fontSize: 12, opacity: 0.7 }}>Preostalo</div>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>
+            {formatTime(timeLeft)}
+          </div>
+        </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 18 }}>
@@ -228,7 +249,6 @@ export default function QuizPlay() {
         <button
           type="button"
           onClick={() => setConfirmExitOpen(true)}
-
           disabled={submitting}
           style={{ padding: "10px 14px", borderRadius: 12 }}
         >
@@ -236,46 +256,39 @@ export default function QuizPlay() {
         </button>
 
         <button
-        type="button"
-        onClick={() => submit(false)}
-        disabled={submitting}
-        style={{ padding: "10px 14px", borderRadius: 12 }}
+          type="button"
+          onClick={() => submit(false)}
+          disabled={submitting}
+          style={{ padding: "10px 14px", borderRadius: 12, background: "#3b82f6", color: "white", border: "none" }}
         >
-        {submitting ? (
+          {submitting ? (
             <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-            <Spinner size={16} />
-            Šaljem...
+              <Spinner size={16} />
+              Šaljem...
             </span>
-        ) : (
+          ) : (
             "Submit"
-        )}
+          )}
         </button>
-
       </div>
+
       <Modal
         open={confirmExitOpen}
         title="Napusti kviz?"
         onClose={() => setConfirmExitOpen(false)}
         footer={
-            <>
-            <button
-                onClick={() => setConfirmExitOpen(false)}
-                style={{ padding: "10px 14px", borderRadius: 12 }}
-            >
-                Nastavi
+          <>
+            <button onClick={() => setConfirmExitOpen(false)} style={{ padding: "10px 14px", borderRadius: 12 }}>
+              Nastavi
             </button>
-            <button
-                onClick={() => navigate("/quizzes")}
-                style={{ padding: "10px 14px", borderRadius: 12 }}
-            >
-                Napusti
+            <button onClick={() => navigate("/quizzes")} style={{ padding: "10px 14px", borderRadius: 12, background: "#ff4d4f", color: "white", border: "none" }}>
+              Napusti
             </button>
-            </>
+          </>
         }
-        >
+      >
         Imaš neposlate odgovore. Ako napustiš kviz, izgubićeš trenutni pokušaj.
-        </Modal>
-
+      </Modal>
     </div>
   );
 }

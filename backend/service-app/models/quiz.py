@@ -55,7 +55,7 @@ class Quiz(db.Model):
             "status": self.status,
             "duration_seconds": self.duration_seconds,
             "author_id": self.author_id,
-            "rejection_reason": self.rejection_reason,
+            "rejection_reason": self.reject_reason,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if getattr(self, "updated_at", None) else None,
         }

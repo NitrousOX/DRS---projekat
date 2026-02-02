@@ -117,7 +117,7 @@ export default function QuizList() {
             <div>
               <div style={{ fontWeight: 800 }}>{getTitle(q)}</div>
               <div style={{ fontSize: 13, opacity: 0.7, marginTop: 6 }}>
-                {getQuestionsCount(q)} pitanja · {getDurationSeconds(q)}s
+                {getDurationSeconds(q)}s
               </div>
             </div>
 

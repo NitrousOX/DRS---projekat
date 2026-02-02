@@ -11,7 +11,7 @@ type Attempt = {
   quizTitle: string;
   durationSeconds: number;
   timeSpentSeconds: number;
-  answers: Record<string, string[]>;
+  answers: Record<string, (string | number)[]>; // questionId -> selected answerIds
   status: "PROCESSING" | "DONE";
   score?: number;
 };
@@ -20,7 +20,6 @@ export default function QuizProcessing() {
   const { attemptId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-
   const [attempt, setAttempt] = useState<Attempt | null>(null);
 
   useEffect(() => {
@@ -36,82 +35,135 @@ export default function QuizProcessing() {
       }
     };
 
-    setAttempt(read());
+    const calculateFinalScore = async (currentAttempt: Attempt) => {
+      try {
+        // 1. Dobavljamo originalni kviz sa servera da proverimo tačne odgovore
+        const res = await fetch(`http://127.0.0.1:5000/api/quizzes/${currentAttempt.quizId}/full`);
+        if (!res.ok) return 0;
+        const quizData = await res.json();
 
-    const t = window.setInterval(() => {
+        let totalScore = 0;
+
+        // 2. Prolazimo kroz svako pitanje iz kviza
+        quizData.questions.forEach((question: any) => {
+          const selectedIds = currentAttempt.answers[question.id] || [];
+
+          // Pronalazimo sve ID-eve koji su označeni kao tačni u bazi
+          const correctIds = question.answers
+            .filter((a: any) => a.is_correct)
+            .map((a: any) => a.id.toString());
+
+          // Pretvaramo selektovane u stringove radi lakšeg poređenja
+          const selectedStrIds = selectedIds.map(id => id.toString());
+
+          // Logika za bodovanje:
+          // Za single-choice: mora biti tačan ID
+          // Za multi-choice: moraju biti izabrani SVI tačni i NIJEDAN netačan
+          const isCorrect =
+            correctIds.length === selectedStrIds.length &&
+            correctIds.every(id => selectedStrIds.includes(id));
+
+          if (isCorrect) {
+            totalScore += question.points;
+          }
+        });
+
+        return totalScore;
+      } catch (err) {
+        console.error("Greška pri računanju bodova:", err);
+        return 0;
+      }
+    };
+
+    const t = window.setInterval(async () => {
       const a = read();
       if (!a) return;
       setAttempt(a);
 
       if (a.status === "DONE") {
+        window.clearInterval(t); // Odmah zaustavljamo interval
+
+        // Izračunaj bodove pre upisa u leaderboard
+        const finalScore = await calculateFinalScore(a);
+
+        // Ažuriraj lokalni storage sa pravim bodovima
+        const updatedAttempt = { ...a, score: finalScore };
+        localStorage.setItem(`attempt:${attemptId}`, JSON.stringify(updatedAttempt));
+        setAttempt(updatedAttempt);
+
+        // Upis u leaderboard
         upsertLeaderboardRow(a.quizId, {
           name: getRole(),
-          score: a.score ?? 0,
+          score: finalScore,
           timeSpentSeconds: a.timeSpentSeconds,
           createdAt: Date.now(),
         });
 
-        toast.success("Rezultat je spreman.", "Gotovo");
-        window.clearInterval(t);
+        toast.success(`Osvojili ste ${finalScore} bodova.`, "Gotovo");
       }
     }, 700);
 
     return () => window.clearInterval(t);
   }, [attemptId, toast]);
 
-  if (!attemptId) {
-    return <div style={{ padding: 24 }}>Nedostaje attemptId.</div>;
-  }
-
-  if (!attempt) {
-    return (
-      <div className="page">
-        <h1>Rezultat</h1>
-        <p style={{ opacity: 0.7 }}>Nema attempt-a u storage-u. Pokreni kviz ponovo.</p>
-        <button className="btn" onClick={() => navigate("/quizzes")}>
-          Nazad na kvizove
-        </button>
-      </div>
-    );
-  }
+  // --- Render logika ostaje ista ---
+  if (!attemptId) return <div style={{ padding: 24 }}>Nedostaje attemptId.</div>;
+  if (!attempt) return (
+    <div className="page" style={{ padding: 24 }}>
+      <h1>Rezultat</h1>
+      <p>Učitavanje rezultata...</p>
+      <Spinner />
+    </div>
+  );
 
   return (
-    <div className="page">
+    <div className="page" style={{ padding: 24, maxWidth: 600, margin: '0 auto' }}>
       <h1 style={{ marginBottom: 6 }}>Rezultat: {attempt.quizTitle}</h1>
       <p style={{ opacity: 0.75, marginTop: 0 }}>
-        Status: <strong>{attempt.status}</strong>
+        Status: <strong style={{ color: attempt.status === "DONE" ? "#52c41a" : "#1890ff" }}>{attempt.status}</strong>
       </p>
 
-      <div className="card" style={{ marginTop: 14 }}>
-        <div>
-          Utrošeno vreme: <strong>{attempt.timeSpentSeconds}s</strong>
+      <div className="card" style={{
+        marginTop: 14,
+        padding: 20,
+        borderRadius: 12,
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.1)"
+      }}>
+        <div style={{ fontSize: 18 }}>
+          Vreme: <strong>{attempt.timeSpentSeconds}s</strong>
         </div>
 
         {attempt.status === "DONE" && (
-          <div style={{ marginTop: 8 }}>
-            Bodovi (mock): <strong>{attempt.score ?? 0}</strong>
+          <div style={{ marginTop: 12, fontSize: 24, fontWeight: 'bold', color: '#3b82f6' }}>
+            Ukupno bodova: {attempt.score ?? 0}
           </div>
         )}
 
         {attempt.status === "PROCESSING" && (
-          <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", opacity: 0.85 }}>
+          <div style={{ marginTop: 15, display: "flex", gap: 10, alignItems: "center" }}>
             <Spinner />
-            <span>Obrada traje…</span>
+            <span>Sistem proverava vaše odgovore…</span>
           </div>
         )}
       </div>
 
-      {attempt.status === "DONE" && (
-        <div style={{ marginTop: 16 }}>
-          <button className="btn btn--primary" onClick={() => navigate(`/results/${attemptId}/view`)}>
-            Prikaži rezultat
+      <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
+        {attempt.status === "DONE" && (
+          <button
+            className="btn btn--primary"
+            style={{ padding: '10px 20px', borderRadius: 8, background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer' }}
+            onClick={() => navigate(`/results/${attemptId}/view`)}
+          >
+            Pregledaj odgovore
           </button>
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-        <button className="btn" onClick={() => navigate("/quizzes")}>
-          Nazad na kvizove
+        )}
+        <button
+          className="btn"
+          style={{ padding: '10px 20px', borderRadius: 8, cursor: 'pointer' }}
+          onClick={() => navigate("/quizzes")}
+        >
+          Kraj
         </button>
       </div>
     </div>

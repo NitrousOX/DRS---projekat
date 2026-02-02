@@ -5,7 +5,13 @@ from datetime import timedelta
 load_dotenv()
 class Config:
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1) 
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
+    JWT_TOKEN_LOCATION = ['cookies']
+    JWT_ACCESS_COOKIE_NAME = 'access_token'
+    JWT_COOKIE_CSRF_PROTECT = False  
+    JWT_COOKIE_HTTPONLY = True      
+    JWT_COOKIE_SECURE = False       
+    JWT_COOKIE_SAMESITE = 'Lax'
 
     UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'static/uploads')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  
