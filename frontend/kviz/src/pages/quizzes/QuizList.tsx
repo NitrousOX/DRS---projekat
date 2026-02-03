@@ -80,9 +80,6 @@ export default function QuizList() {
   return (
     <div className="page">
       <h1 style={{ marginBottom: 8 }}>Dostupni kvizovi</h1>
-      <p style={{ opacity: 0.7, marginTop: 0 }}>
-        Lista se učitava sa API-ja (samo APPROVED).
-      </p>
 
       {loading && <div style={{ opacity: 0.7 }}>Učitavam...</div>}
 

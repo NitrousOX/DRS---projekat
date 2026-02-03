@@ -61,7 +61,7 @@ class AuthService:
         if user.check_password(password):
             self.repo.reset_login_attempts(user)
             
-            additional_claims = {"role": user.role}
+            additional_claims = {"role": user.role, "email":user.email}
             access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
             
             return ApiResponse({

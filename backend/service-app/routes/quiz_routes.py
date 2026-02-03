@@ -110,16 +110,30 @@ def get_full_quiz(quiz_id: int):
 
     return jsonify(payload), 200
 
+from flask import request, jsonify
+from flask_jwt_extended import get_jwt_identity, get_jwt, jwt_required
+from models.quiz import Quiz, Question, Answer, QuizResult
+from extensions import db
+import time
+
 @quiz_bp.route("/quizzes/<int:quiz_id>/process", methods=["POST"])
+@jwt_required()
 def process_quiz(quiz_id: int):
     payload = request.get_json(silent=True) or {}
 
-    user_id = payload.get("user_id")
-    user_email = payload.get("user_email")  # optional (može biti None)
+    # 1. Identity & Claims extraction
+    # current_user_id comes from the 'sub' field in JWT
+    current_user_id = get_jwt_identity()
+    
+    # claims comes from the 'additional_claims' we added in AuthService
+    claims = get_jwt()
+    user_email = claims.get("email", "Unknown")
+
     time_spent_seconds = payload.get("time_spent_seconds")
     answers = payload.get("answers")
 
-    if user_id is None or time_spent_seconds is None or not isinstance(answers, list):
+    # Basic Validation
+    if time_spent_seconds is None or not isinstance(answers, list):
         return jsonify({"error": "Invalid payload"}), 400
 
     quiz = Quiz.query.get(quiz_id)
@@ -129,10 +143,10 @@ def process_quiz(quiz_id: int):
     if quiz.status != "APPROVED":
         return jsonify({"error": "Quiz is not approved"}), 400
 
-    # 1) simulacija duže obrade
+    # 1) Simulation of heavy processing
     time.sleep(3)
 
-    # 2) priprema mapiranja: question_id -> set(submitted answer_ids)
+    # 2) Mapping: question_id -> set of submitted answer_ids
     submitted = {}
     for item in answers:
         qid = item.get("question_id")
@@ -141,7 +155,7 @@ def process_quiz(quiz_id: int):
             continue
         submitted[int(qid)] = set(int(x) for x in aids)
 
-    # 3) scoring
+    # 3) Scoring Logic
     questions = Question.query.filter_by(quiz_id=quiz_id).all()
     max_score = sum((q.points or 0) for q in questions)
 
@@ -149,39 +163,48 @@ def process_quiz(quiz_id: int):
     correct_count = 0
 
     for q in questions:
+        # Get correct answer IDs from DB
         correct_answers = Answer.query.filter_by(question_id=q.id, is_correct=True).all()
         correct_set = set(a.id for a in correct_answers)
 
+        # Get what the user sent for this specific question
         submitted_set = submitted.get(q.id, set())
 
-        # tačno ako su skupovi identični i postoji bar jedan tačan odgovor
+        # Correct only if sets match perfectly
         if len(correct_set) > 0 and submitted_set == correct_set:
             score += int(q.points or 0)
             correct_count += 1
 
     total_questions = len(questions)
 
-    # 4) upis rezultata u DB2
+    # 4) Save result to Database
+    # We use user_id and user_email extracted directly from the secure JWT
     result = QuizResult(
-        user_id=int(user_id),
+        user_id=int(current_user_id),
         user_email=user_email,
         quiz_id=quiz_id,
         score=int(score),
         time_spent_seconds=int(time_spent_seconds)
     )
-    db.session.add(result)
-    db.session.commit()
+    
+    try:
+        db.session.add(result)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Database error while saving result"}), 500
 
+    # 5) Return data to Frontend
     return jsonify({
         "quiz_id": quiz_id,
-        "user_id": int(user_id),
+        "user_id": int(current_user_id),
+        "user_email": user_email,
         "score": int(score),
         "max_score": int(max_score),
         "correct_count": int(correct_count),
         "total_questions": int(total_questions),
         "time_spent_seconds": int(time_spent_seconds)
     }), 200
-
 @quiz_bp.route("/quizzes/<int:quiz_id>/leaderboard", methods=["GET"])
 def quiz_leaderboard(quiz_id: int):
     # query param limit, default 10
