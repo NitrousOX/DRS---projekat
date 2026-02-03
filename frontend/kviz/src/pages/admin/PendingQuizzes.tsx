@@ -9,7 +9,6 @@ type QuizListItemDto = {
   title?: string;
   name?: string;
   status?: string;
-  durationSeconds?: number;
   duration_seconds?: number;
   questionsCount?: number;
   questions_count?: number;
@@ -25,7 +24,7 @@ function getTitle(q: QuizListItemDto) {
   return q.title ?? q.name ?? "Bez naziva";
 }
 function getDurationSeconds(q: QuizListItemDto) {
-  return q.durationSeconds ?? q.duration_seconds ?? 0;
+  return q.duration_seconds ?? 0;
 }
 function getQuestionsCount(q: QuizListItemDto) {
   if (typeof q.questionsCount === "number") return q.questionsCount;

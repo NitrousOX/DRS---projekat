@@ -2,7 +2,7 @@ export type Role = "IGRAC" | "MODERATOR" | "ADMIN";
 
 export type QuizDraft = {
   title: string;
-  durationSeconds: number;
+  duration_seconds: number;
   authorId?: string;
   questions: QuizDraftQuestion[];
 };

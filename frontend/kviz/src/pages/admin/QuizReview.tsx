@@ -36,7 +36,7 @@ export default function QuizReview() {
 
       <div style={{ opacity: 0.7, marginBottom: 20 }}>
         Autor: {quiz.authorName} · {quiz.questionsCount} pitanja ·{" "}
-        {quiz.durationSeconds}s
+        {quiz.duration_seconds}s
       </div>
 
       <div

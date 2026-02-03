@@ -25,7 +25,7 @@ function makeEmptyQuestion(): QuizDraftQuestion {
 function makeEmptyQuiz(): QuizDraft {
   return {
     title: "",
-    durationSeconds: 60,
+    duration_seconds: 60,
     questions: [makeEmptyQuestion()],
   };
 }
@@ -36,8 +36,8 @@ function validateQuiz(draft: QuizDraft): ValidationError[] {
   const errors: ValidationError[] = [];
 
   if (!draft.title.trim()) errors.push({ path: "title", message: "Naziv kviza je obavezan." });
-  if (!Number.isFinite(draft.durationSeconds) || draft.durationSeconds < 5) {
-    errors.push({ path: "durationSeconds", message: "Trajanje mora biti najmanje 5 sekundi." });
+  if (!Number.isFinite(draft.duration_seconds) || draft.duration_seconds < 5) {
+    errors.push({ path: "duration_seconds", message: "Trajanje mora biti najmanje 5 sekundi." });
   }
   if (draft.questions.length < 1) errors.push({ path: "questions", message: "Dodaj bar jedno pitanje." });
 
@@ -86,7 +86,7 @@ export default function QuizEditor(props: {
   }
 
   function setDurationSeconds(value: number) {
-    setDraft((d) => ({ ...d, durationSeconds: value }));
+    setDraft((d) => ({ ...d, duration_seconds: value }));
   }
 
   function addQuestion() {
@@ -122,7 +122,7 @@ export default function QuizEditor(props: {
       questions: d.questions.map((q) => {
         if (q.id !== qid) return q;
         const nextAnswers = q.answers.filter((a) => a.id !== aid);
-        
+
         while (nextAnswers.length < 2) nextAnswers.push(makeEmptyAnswer());
         return { ...q, answers: nextAnswers };
       }),
@@ -149,43 +149,43 @@ export default function QuizEditor(props: {
   }
 
 
-    async function handleSubmit(e: React.FormEvent) {
-  e.preventDefault();
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
 
-  const v = validateQuiz(draft);
-  setErrors(v);
-  if (v.length) {
-    toast.error("Ispravi označena polja pa pokušaj ponovo.", "Greška u formi");
-    return;
-  }
-
-  setSubmitting(true);
-  try {
-    await props.onSubmit(draft);
-
-    toast.success("Kviz je sačuvan.", "Uspeh");
-
-    if (props.resetAfterSubmit) {
-      setDraft(makeEmptyQuiz());
-      setErrors([]);
+    const v = validateQuiz(draft);
+    setErrors(v);
+    if (v.length) {
+      toast.error("Ispravi označena polja pa pokušaj ponovo.", "Greška u formi");
+      return;
     }
-  } catch (err: any) {
-    console.error(err);
 
-    const msg =
-      err?.response?.data?.message ||
-      err?.message ||
-      "Nešto je pošlo po zlu. Pokušaj ponovo.";
+    setSubmitting(true);
+    try {
+      await props.onSubmit(draft);
 
-    toast.error(msg, "Neuspešno čuvanje");
-  } finally {
-    setSubmitting(false);
+      toast.success("Kviz je sačuvan.", "Uspeh");
+
+      if (props.resetAfterSubmit) {
+        setDraft(makeEmptyQuiz());
+        setErrors([]);
+      }
+    } catch (err: any) {
+      console.error(err);
+
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Nešto je pošlo po zlu. Pokušaj ponovo.";
+
+      toast.error(msg, "Neuspešno čuvanje");
+    } finally {
+      setSubmitting(false);
+    }
   }
-}
 
 
 
-    return (
+  return (
     <form onSubmit={handleSubmit} className="qe-wrap">
       <div className="qe-head">
         <h1 className="qe-title">Kreiraj kviz</h1>
@@ -210,11 +210,11 @@ export default function QuizEditor(props: {
             <input
               className="qe-input"
               type="number"
-              value={draft.durationSeconds}
+              value={draft.duration_seconds}
               onChange={(e) => setDurationSeconds(Number(e.target.value))}
               min={5}
             />
-            {errorMap.get("durationSeconds") && <div className="qe-error">{errorMap.get("durationSeconds")}</div>}
+            {errorMap.get("duration_seconds") && <div className="qe-error">{errorMap.get("duration_seconds")}</div>}
             <div className="qe-smallNote" style={{ marginTop: 8 }}>
               Za testiranje stavite kratko (npr. 30–60s).
             </div>

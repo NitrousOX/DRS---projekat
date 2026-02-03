@@ -1,6 +1,6 @@
 export type CreateQuizRequestDTO = {
   title: string;
-  durationSeconds: number;
+  duration_seconds: number;
   authorId?: string;
   questions: CreateQuizQuestionDTO[];
 };
