@@ -1,7 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./app/auth/AuthContext";
 import AppLayout from "./app/layouts/AppLayout";
-//import Home from "./pages/Home";
 
 // Public
 import Login from "./pages/Login";
@@ -30,7 +29,7 @@ export default function App() {
   return (
     <AuthProvider>
       <Routes>
-        {/* PUBLIC ROUTES (bez auth-a) */}
+        {/* PUBLIC ROUTES */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/auth" element={<Navigate to="/login" replace />} />
@@ -38,23 +37,30 @@ export default function App() {
         {/* PRIVATE ROUTES */}
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
-            {/* ROOT */}
+            {/* ROOT REDIRECT */}
             <Route path="/" element={<Navigate to="/quizzes" replace />} />
 
             {/* PROFILE */}
             <Route path="/profile" element={<Profile />} />
 
-            {/* QUIZZES */}
+            {/* QUIZZES & LEADERBOARD */}
             <Route path="/quizzes" element={<QuizList />} />
+
+            {/* Global Leaderboard with Quiz Selection Dropdown */}
+            <Route path="/leaderboard" element={<Leaderboard />} />
+
+            {/* Specific Quiz Leaderboard (optional, if you want direct links) */}
+            <Route path="/quizzes/:id/leaderboard" element={<Leaderboard />} />
+
+            {/* QUIZ PLAY FLOW */}
             <Route path="/quizzes/:id/play" element={<QuizPlay />} />
             <Route path="/results/:attemptId" element={<QuizProcessing />} />
             <Route path="/results/:attemptId/view" element={<QuizResult />} />
-            <Route path="/quizzes/:id/leaderboard" element={<Leaderboard />} />
 
-            {/* MODERATOR */}
+            {/* MODERATOR ROUTES */}
             <Route path="/moderator/create" element={<QuizCreate />} />
 
-            {/* ADMIN */}
+            {/* ADMIN ROUTES */}
             <Route path="/admin/users" element={<UsersAdmin />} />
             <Route path="/admin/pending" element={<PendingQuizzes />} />
             <Route path="/admin/pending/:id" element={<QuizReview />} />

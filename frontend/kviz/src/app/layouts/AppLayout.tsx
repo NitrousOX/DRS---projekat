@@ -102,6 +102,8 @@ export default function AppLayout() {
             <nav style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <LinkItem to="/quizzes" label="Quizzes" />
 
+              <LinkItem to="/leaderboard" label="Leaderboard" />
+
               {/* ✅ svi ulogovani vide Profile */}
               <LinkItem to="/profile" label="Profile" />
 

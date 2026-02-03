@@ -7,15 +7,14 @@ import Spinner from "../../components/common/ui/Spinner";
 type AnswerState = Record<string, string[]>; // questionId -> selected answerIds
 
 interface QuizData {
-  id: string;
+  id: number;
   title: string;
-  durationSeconds: number;
+  duration_seconds: number;
   questions: Array<{
-    id: string;
+    id: number;
     text: string;
     points: number;
-    multi: boolean;
-    answers: Array<{ id: string; text: string }>;
+    answers: Array<{ id: number; text: string }>;
   }>;
 }
 
@@ -51,7 +50,6 @@ export default function QuizPlay() {
 
       try {
         setLoading(true);
-        // Using port 5000 as requested
         const response = await fetch(`http://127.0.0.1:5000/api/quizzes/${id}/full`);
 
         if (!response.ok) {
@@ -60,7 +58,7 @@ export default function QuizPlay() {
 
         const data: QuizData = await response.json();
         setQuiz(data);
-        setTimeLeft(data.durationSeconds);
+        setTimeLeft(data.duration_seconds);
         setAnswers({});
         didAutoSubmitRef.current = false;
       } catch (err) {
@@ -117,40 +115,44 @@ export default function QuizPlay() {
 
   async function submit(auto = false) {
     if (!quiz || submitting) return;
-
-    const any = Object.values(answers).some((arr) => arr.length > 0);
-    if (!auto && !any) {
-      toast.error("Označi bar jedan odgovor pre slanja.", "Nema odgovora");
-      return;
-    }
-
     setSubmitting(true);
 
-    const attemptId = uid();
-    const payload = {
-      attemptId,
-      quizId: quiz.id,
-      quizTitle: quiz.title,
-      durationSeconds: quiz.durationSeconds,
-      timeSpentSeconds: Math.max(0, quiz.durationSeconds - timeLeft),
-      answers,
-      startedAt: Date.now(),
-      status: "PROCESSING" as const,
-    };
+    // Format answers for Flask: [{question_id: 1, answer_ids: [1, 2]}, ...]
+    const formattedAnswers = Object.entries(answers).map(([qId, aIds]) => ({
+      question_id: parseInt(qId),
+      answer_ids: aIds.map(id => parseInt(id))
+    }));
 
-    localStorage.setItem(`attempt:${attemptId}`, JSON.stringify(payload));
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/quizzes/${quiz.id}/process`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: 1, // Replace with real logged-in user ID
+          user_email: "test@example.com",
+          time_spent_seconds: Math.max(0, quiz.duration_seconds - timeLeft),
+          answers: formattedAnswers
+        }),
+      });
 
-    // Mock processing delay
-    setTimeout(() => {
-      const done = {
-        ...payload,
-        status: "DONE" as const,
-        score: answeredCount * 10,
-      };
-      localStorage.setItem(`attempt:${attemptId}`, JSON.stringify(done));
-      toast.success("Odgovori poslati.", "Poslato");
+      if (!response.ok) throw new Error("Submission failed");
+
+      const result = await response.json();
+
+      // Save the BACKEND result to localStorage so the results page can show it
+      const attemptId = uid();
+      localStorage.setItem(`attempt:${attemptId}`, JSON.stringify({
+        ...result,
+        quizTitle: quiz.title,
+        status: "DONE"
+      }));
+
       navigate(`/results/${attemptId}`, { replace: true });
-    }, 2000);
+    } catch (err) {
+      toast.error("Greška pri komunikaciji sa serverom.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (loading) {

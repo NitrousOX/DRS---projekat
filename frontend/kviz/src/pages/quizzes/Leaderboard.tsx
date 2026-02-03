@@ -1,152 +1,193 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { quizzesMock } from "../../mocks/quizzes.mock"; // ovo može ostati dok ne imaš quiz details endpoint
+import { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { quizHttp } from "../../api/http";
+import Spinner from "../../components/common/ui/Spinner";
 
-type LeaderboardRow = {
-  name: string;
+interface QuizSummary {
+  id: number;
+  title: string;
+  status: string;
+}
+
+interface LeaderboardEntry {
+  result_id: number;
+  user_email: string;
   score: number;
-  timeSpentSeconds: number;
-};
+  time_spent_seconds: number;
+  completed_at: string;
+}
 
-type LeaderboardResponse = {
-  results: LeaderboardRow[];
-};
-
-function formatTime(seconds: number) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+interface LeaderboardResponse {
+  quiz_id: number;
+  results: LeaderboardEntry[];
 }
 
 export default function Leaderboard() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const quiz = useMemo(() => quizzesMock.find((q) => q.id === id), [id]);
+  const [quizzes, setQuizzes] = useState<QuizSummary[]>([]);
+  const [selectedQuizId, setSelectedQuizId] = useState<number | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [loadingQuizzes, setLoadingQuizzes] = useState(true);
+  const [loadingTable, setLoadingTable] = useState(false);
 
-  const [rows, setRows] = useState<LeaderboardRow[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
+  // 1. Fetch available quizzes and handle initial selection from URL
   useEffect(() => {
-    if (!id) return;
-
-    const controller = new AbortController();
-
-    async function loadLeaderboard() {
+    async function loadQuizzes() {
       try {
-        setLoading(true);
-        setError(null);
+        const data = await quizHttp.get<QuizSummary[]>("/api/quizzes");
+        const approved = data.filter((q) => q.status === "APPROVED");
+        setQuizzes(approved);
 
-        const limit = 10;
-
-        // Ako ti treba auth, otkomentariši i prilagodi key
-        const token = localStorage.getItem("token"); // npr: "accessToken"
-        const res = await fetch(`/api/quizzes/${id}/leaderboard?limit=${limit}`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          // pokušaj da izvučeš message iz body-ja
-          let msg = `Greška: ${res.status}`;
-          try {
-            const body = await res.json();
-            msg = body?.message || body?.detail || msg;
-          } catch {}
-          throw new Error(msg);
+        // Priority: URL Param > State > First available quiz
+        if (id) {
+          setSelectedQuizId(Number(id));
+        } else if (approved.length > 0 && !selectedQuizId) {
+          setSelectedQuizId(approved[0].id);
         }
-
-        const data = (await res.json()) as LeaderboardResponse;
-        setRows(Array.isArray(data.results) ? data.results : []);
-      } catch (e: any) {
-        if (e?.name === "AbortError") return;
-        setError(e?.message ?? "Neuspešno učitavanje rang liste.");
-        setRows([]);
+      } catch (err) {
+        console.error("Failed to load quizzes", err);
       } finally {
-        setLoading(false);
+        setLoadingQuizzes(false);
       }
     }
-
-    loadLeaderboard();
-
-    return () => controller.abort();
+    loadQuizzes();
   }, [id]);
 
-  if (!id || !quiz) {
+  // 2. Fetch specific leaderboard data when the selection changes
+  useEffect(() => {
+    if (!selectedQuizId) return;
+
+    async function loadLeaderboard() {
+      setLoadingTable(true);
+      try {
+        const data = await quizHttp.get<LeaderboardResponse>(
+          `/api/quizzes/${selectedQuizId}/leaderboard`
+        );
+        setLeaderboard(data.results);
+      } catch (err) {
+        console.error("Failed to load leaderboard", err);
+      } finally {
+        setLoadingTable(false);
+      }
+    }
+    loadLeaderboard();
+  }, [selectedQuizId]);
+
+  // Handle dropdown change and sync URL
+  const handleQuizChange = (newId: number) => {
+    setSelectedQuizId(newId);
+    navigate(`/quizzes/${newId}/leaderboard`, { replace: true });
+  };
+
+  if (loadingQuizzes) {
     return (
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
-        <h1>Rang lista</h1>
-        <p style={{ opacity: 0.7 }}>Kviz nije pronađen.</p>
-        <button onClick={() => navigate("/quizzes")} style={{ padding: "10px 14px", borderRadius: 12 }}>
-          Nazad
-        </button>
+      <div className="flex justify-center items-center h-[60vh]">
+        <Spinner size={40} />
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ marginBottom: 6 }}>Rang lista</h1>
-      <p style={{ opacity: 0.75, marginTop: 0 }}>{quiz.title}</p>
+    <div className="min-h-screen bg-[#0f172a] text-white p-4 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        <header className="text-center mb-10">
+          <h1 className="text-4xl font-extrabold mb-2 bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">
+            Rang Lista
+          </h1>
+          <p className="text-slate-400">Najbolji rezultati naših korisnika</p>
+        </header>
 
-      <div
-        style={{
-          border: "1px solid rgba(255,255,255,0.12)",
-          background: "rgba(255,255,255,0.04)",
-          borderRadius: 16,
-          padding: 16,
-          marginTop: 14,
-        }}
-      >
-        {loading ? (
-          <p style={{ opacity: 0.7, margin: 0 }}>Učitavanje...</p>
-        ) : error ? (
-          <div style={{ display: "grid", gap: 10 }}>
-            <p style={{ opacity: 0.85, margin: 0 }}>{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              style={{ padding: "10px 14px", borderRadius: 12, width: "fit-content" }}
+        {/* --- Dropdown Selector with Glassmorphism --- */}
+        <div className="mb-10 flex justify-center">
+          <div className="relative w-full max-w-sm">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 ml-1">
+              Izaberi Kviz
+            </label>
+            <select
+              value={selectedQuizId ?? ""}
+              onChange={(e) => handleQuizChange(Number(e.target.value))}
+              className="w-full bg-white/5 border border-white/10 backdrop-blur-md text-white rounded-2xl px-5 py-4 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all cursor-pointer shadow-lg"
             >
-              Pokušaj ponovo
-            </button>
+              {quizzes.map((q) => (
+                <option key={q.id} value={q.id} className="bg-slate-900 text-white">
+                  {q.title}
+                </option>
+              ))}
+            </select>
+            <div className="absolute bottom-5 right-5 pointer-events-none opacity-40">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z" />
+              </svg>
+            </div>
           </div>
-        ) : rows.length === 0 ? (
-          <p style={{ opacity: 0.7, margin: 0 }}>Nema rezultata još.</p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {rows.map((r, i) => (
-              <div
-                key={`${r.name}-${i}`}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "50px 1fr 120px 140px",
-                  gap: 10,
-                  alignItems: "center",
-                  padding: "10px 12px",
-                  borderRadius: 14,
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  background: "rgba(255,255,255,0.03)",
-                }}
-              >
-                <div style={{ fontWeight: 900 }}>{i + 1}.</div>
-                <div style={{ fontWeight: 700 }}>{r.name}</div>
-                <div style={{ textAlign: "right", opacity: 0.85 }}>{r.score} pts</div>
-                <div style={{ textAlign: "right", opacity: 0.85 }}>{formatTime(r.timeSpentSeconds)}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+        </div>
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-        <button onClick={() => navigate("/quizzes")} style={{ padding: "10px 14px", borderRadius: 12 }}>
-          Nazad na kvizove
-        </button>
+        {/* --- Leaderboard Table Container --- */}
+        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-2xl shadow-2xl">
+          {loadingTable ? (
+            <div className="p-32 flex flex-col items-center justify-center">
+              <Spinner size={32} />
+              <span className="mt-4 text-slate-500 animate-pulse">Učitavanje rezultata...</span>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-white/5 text-slate-400 text-sm uppercase tracking-widest">
+                    <th className="px-8 py-5 font-bold">Pozicija</th>
+                    <th className="px-8 py-5 font-bold">Korisnik</th>
+                    <th className="px-8 py-5 font-bold text-center">Poeni</th>
+                    <th className="px-8 py-5 font-bold text-center">Vreme</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {leaderboard.length > 0 ? (
+                    leaderboard.map((entry, index) => (
+                      <tr
+                        key={entry.result_id}
+                        className="hover:bg-white/[0.07] transition-all duration-200 group"
+                      >
+                        <td className="px-8 py-5">
+                          <div className={`flex items-center justify-center w-10 h-10 rounded-xl font-black shadow-inner ${index === 0 ? 'bg-gradient-to-br from-yellow-300 to-yellow-600 text-yellow-950 scale-110' :
+                              index === 1 ? 'bg-gradient-to-br from-slate-200 to-slate-400 text-slate-900' :
+                                index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-700 text-orange-950' :
+                                  'bg-white/5 text-slate-400'
+                            }`}>
+                            {index + 1}
+                          </div>
+                        </td>
+                        <td className="px-8 py-5 font-semibold text-slate-200 group-hover:text-white">
+                          {entry.user_email}
+                        </td>
+                        <td className="px-8 py-5 text-center">
+                          <span className="text-xl font-bold text-blue-400">
+                            {entry.score}
+                          </span>
+                        </td>
+                        <td className="px-8 py-5 text-center text-slate-400 font-mono">
+                          {entry.time_spent_seconds}s
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-8 py-32 text-center">
+                        <div className="flex flex-col items-center opacity-30">
+                          <svg className="mb-4" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                          <p className="text-xl">Još uvek nema rezultata</p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
