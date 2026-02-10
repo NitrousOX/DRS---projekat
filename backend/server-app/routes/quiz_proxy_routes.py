@@ -7,13 +7,6 @@ from extensions import socketio
 quiz_proxy_bp = Blueprint("quiz_proxy_bp", __name__)
 QUIZ_SERVICE_URL = os.getenv("QUIZ_SERVICE_URL", "http://127.0.0.1:5000")
 
-def _forward_cookies():
-    # prosledi access_token ka service-app
-    token = request.cookies.get("access_token")
-    if not token:
-        return {}
-    return {"access_token": token}
-
 @quiz_proxy_bp.route("/quizzes/<int:quiz_id>/submit", methods=["POST"])
 @jwt_required()
 def submit_quiz_proxy(quiz_id: int):
@@ -23,19 +16,11 @@ def submit_quiz_proxy(quiz_id: int):
     if role not in ["MODERATOR", "ADMIN"]:
         return jsonify({"error": "Forbidden"}), 403
 
-    r = requests.post(f"{QUIZ_SERVICE_URL}/api/quizzes/{quiz_id}/submit", cookies=_forward_cookies())
+    r = requests.post(f"{QUIZ_SERVICE_URL}/api/quizzes/{quiz_id}/submit")
     data = r.json() if r.headers.get("Content-Type","").startswith("application/json") else {"raw": r.text}
 
-    if r.status_code == 200:
-        data = r.json()
-
-        # emituj adminima kad ode na odobravanje
-        if data.get("status") == "PENDING":
-            socketio.emit(
-                "quiz:new_pending",
-                {"quiz_id": quiz_id, "status": "PENDING"},
-                room="admins"
-        )
+    if r.status_code == 200 and data.get("status") == "PENDING":
+        socketio.emit("quiz:new_pending", {"quiz_id": quiz_id}, room="admins")
 
     return jsonify(data), r.status_code
 
@@ -46,7 +31,7 @@ def list_quizzes_proxy():
     role = claims.get("role")
 
     include = request.args.get("include", "summary")
-    r = requests.get(f"{QUIZ_SERVICE_URL}/api/quizzes", params={"include": include}, cookies=_forward_cookies())
+    r = requests.get(f"{QUIZ_SERVICE_URL}/api/quizzes", params={"include": include})
 
     if r.status_code != 200:
         return jsonify({"error": "Quiz service error"}), r.status_code
@@ -86,56 +71,5 @@ def create_quiz_proxy():
     # author_id se setuje ovde (backend), front ne šalje
     data["author_id"] = user_id
 
-    r = requests.post(f"{QUIZ_SERVICE_URL}/api/quizzes", json=data, cookies=_forward_cookies())
+    r = requests.post(f"{QUIZ_SERVICE_URL}/api/quizzes", json=data)
     return jsonify(r.json()), r.status_code
-
-@quiz_proxy_bp.route("/quizzes/<int:quiz_id>/approve", methods=["POST"])
-@jwt_required()
-def approve_quiz_proxy(quiz_id: int):
-    claims = get_jwt()
-    role = claims.get("role")
-
-    if role != "ADMIN":
-        return jsonify({"error": "Forbidden"}), 403
-
-    r = requests.post(
-        f"{QUIZ_SERVICE_URL}/api/quizzes/{quiz_id}/approve",
-        cookies=_forward_cookies()
-    )
-
-    data = r.json() if r.headers.get("Content-Type", "").startswith("application/json") else {"raw": r.text}
-    return jsonify(data), r.status_code
-
-@quiz_proxy_bp.route("/quizzes/<int:quiz_id>/reject", methods=["POST"])
-@jwt_required()
-def reject_quiz_proxy(quiz_id: int):
-    claims = get_jwt()
-    role = claims.get("role")
-
-    if role != "ADMIN":
-        return jsonify({"error": "Forbidden"}), 403
-
-    payload = request.get_json(silent=True) or {}
-    reason = (payload.get("reason") or "").strip()
-
-    if not reason:
-        return jsonify({"error": "Reason is required"}), 400
-
-    r = requests.post(
-        f"{QUIZ_SERVICE_URL}/api/quizzes/{quiz_id}/reject",
-        json={"reason": reason},
-        cookies=_forward_cookies()
-    )
-
-    data = r.json() if r.headers.get("Content-Type", "").startswith("application/json") else {"raw": r.text}
-    return jsonify(data), r.status_code
-
-@quiz_proxy_bp.route("/quizzes/<int:quiz_id>/full", methods=["GET"])
-@jwt_required()
-def get_full_quiz_proxy(quiz_id: int):
-    r = requests.get(
-        f"{QUIZ_SERVICE_URL}/api/quizzes/{quiz_id}/full",
-        cookies=_forward_cookies()
-    )
-    data = r.json() if r.headers.get("Content-Type","").startswith("application/json") else {"raw": r.text}
-    return jsonify(data), r.status_code

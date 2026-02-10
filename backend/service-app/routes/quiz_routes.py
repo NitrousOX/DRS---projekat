@@ -53,7 +53,6 @@ def list_quizzes():
 
 
 @quiz_bp.route("/quizzes/<int:quiz_id>/submit", methods=["POST"])
-@jwt_required()
 def submit_quiz(quiz_id: int):
     try:
         quiz = QuizService.submit_quiz(quiz_id)
@@ -62,7 +61,6 @@ def submit_quiz(quiz_id: int):
         return jsonify({"error": str(e)}), 400
     
 @quiz_bp.route("/quizzes/<int:quiz_id>/approve", methods=["POST"])
-@jwt_required()
 def approve_quiz(quiz_id: int):
     try:
         quiz = QuizService.approve_quiz(quiz_id)
@@ -72,7 +70,6 @@ def approve_quiz(quiz_id: int):
 
 
 @quiz_bp.route("/quizzes/<int:quiz_id>/reject", methods=["POST"])
-@jwt_required()
 def reject_quiz(quiz_id: int):
     try:
         data = request.get_json(force=True) if request.data else {}

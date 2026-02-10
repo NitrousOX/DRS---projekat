@@ -9,16 +9,22 @@ export default defineConfig({
     react()
   ],
   server: {
-  proxy: {
-    "/api": {
-      target: "http://localhost:5001",
-      changeOrigin: true,
+    proxy: {
+      // QUIZ create (ako je na 5000)
+      "/api/quizzes": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+      },
+      "/api/questions": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+      },
+
+      // sve ostalo (users, profile, itd) ide na 5001
+      "/api": {
+        target: "http://localhost:5001",
+        changeOrigin: true,
+      },
     },
-    "/socket.io": {
-      target: "http://localhost:5001",
-      ws: true,
-      changeOrigin: true,
-    }
-  }
-}
+  },
 });

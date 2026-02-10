@@ -5,25 +5,17 @@ from extensions import socketio
 
 @socketio.on("connect")
 def on_connect(auth):
-    # 1) cookie auth (spec)
-    token = request.cookies.get("access_token")
-
-    # 2) fallback za testiranje (ako koristiš python skriptu)
-    if not token:
-        token = request.args.get("token")
-
+    token = request.args.get("token")
     if not token:
         print("Socket rejected (reason): missing token")
-        return False
+        return False  # reject connect
 
     try:
-        decoded = decode_token(token)
+        decoded = decode_token(token)  # valid signature + exp
         role = decoded.get("role")
-
+        print("Socket connected: valid JWT")
         if role == "ADMIN":
             join_room("admins")
-
-        print("Socket connected OK, role:", role)
         return True
     except Exception as e:
         print("Socket rejected (reason):", repr(e))
