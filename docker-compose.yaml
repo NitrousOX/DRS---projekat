@@ -1,0 +1,76 @@
+services:
+  # --- DATABASES ---
+  db1-sql:
+    platform: linux/amd64
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql_server
+    ports:
+      - "1433:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "09qfcj0q23rhcp0q239ur203h20392uc!!!!!"
+    volumes:
+      - sql_data:/var/opt/mssql
+
+  db2-sql:
+    platform: linux/amd64
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql_server_2
+    ports:
+      - "1434:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Different_Password_987654321!"
+    volumes:
+      - sql_data_2:/var/opt/mssql
+
+  redis:
+    image: redis:alpine
+    container_name: cache_redis
+
+  # --- BACKENDS ---
+  server-app:
+    build: ./backend
+    container_name: flask_server
+    env_file: ./backend/server-app/.env
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app  # Hot-reload za Python kod
+    command: >
+      sh -c "cd server-app && python -m flask run --host=0.0.0.0 --port=5000 --debug"
+    depends_on:
+      - db1-sql
+      - redis
+
+  service-app:
+    build: ./backend
+    container_name: python_service
+    env_file: ./backend/service-app/.env
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./backend:/app
+    command: >
+      sh -c "cd service-app && python run.py"
+    depends_on:
+      - db2-sql
+
+  # --- FRONTEND (Vite Dev Server) ---
+  frontend:
+    build: 
+      context: ./frontend/kviz
+      dockerfile: Dockerfile
+    container_name: vite_ui
+    ports:
+      - "80:5173"  # Pristupaš na localhost:80, on prosleđuje na Vite dev (5173)
+    volumes:
+      - ./frontend/kviz:/app
+      - /app/node_modules
+    depends_on:
+      - server-app
+      - service-app
+
+volumes:
+  sql_data:
+  sql_data_2:

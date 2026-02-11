@@ -9,7 +9,7 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object('config.Config')
 
-    CORS(app)
+    CORS(app, supports_credentials=True, origins=["http://localhost", "http://127.0.0.1", "http://localhost:5173" ],)
     
     # --- INIT EXTENSIONS ---
     db.init_app(app)

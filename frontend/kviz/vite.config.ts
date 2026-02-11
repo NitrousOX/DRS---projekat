@@ -1,30 +1,31 @@
-// vite.config.ts
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-export default defineConfig({
-  plugins: [
-    tailwindcss(),
-    react()
-  ],
-  server: {
-    proxy: {
-      // QUIZ create (ako je na 5000)
-      "/api/quizzes": {
-        target: "http://localhost:5000",
-        changeOrigin: true,
-      },
-      "/api/questions": {
-        target: "http://localhost:5000",
-        changeOrigin: true,
-      },
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd());
 
-      // sve ostalo (users, profile, itd) ide na 5001
-      "/api": {
-        target: "http://localhost:5001",
-        changeOrigin: true,
+  return {
+    plugins: [tailwindcss(), react()],
+    server: {
+      host: true,
+      port: 5173,
+      strictPort: true,
+
+      proxy: {
+        "/api/quizzes": {
+          target: env.VITE_API_SERVICE_URL,
+          changeOrigin: true,
+        },
+        "/api/questions": {
+          target: env.VITE_API_SERVICE_URL,
+          changeOrigin: true,
+        },
+        "/api": {
+          target: env.VITE_AUTH_SERVICE_URL,
+          changeOrigin: true,
+        },
       },
     },
-  },
+  };
 });

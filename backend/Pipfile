@@ -21,6 +21,7 @@ reportlab = "*"
 flask-cors = "*"
 colorama = "*"
 eventlet = "*"
+redis = "*"
 
 [dev-packages]
 

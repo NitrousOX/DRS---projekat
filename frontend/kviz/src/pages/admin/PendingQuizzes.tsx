@@ -66,7 +66,7 @@ export default function PendingQuizzes() {
     load(); // Inicijalno učitavanje
 
     // Povezivanje na service-app (podesi URL na tvoj backend)
-    const socket: Socket = io("http://localhost:5000/admin", {
+    const socket: Socket = io(`${import.meta.env.VITE_API_SERVICE_URL}/admin`, {
       withCredentials: true,
       transports: ["websocket"],
     });

@@ -1,5 +1,9 @@
 // src/api/http.ts
 
+// 1. Define Base URLs from Environment Variables (with fallbacks for local dev)
+const AUTH_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const QUIZ_BASE = import.meta.env.VITE_SERVICE_API_URL || "http://localhost:5001";
+
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 type FetchOptions = {
@@ -12,12 +16,12 @@ function isFormData(x: any): x is FormData {
   return typeof FormData !== "undefined" && x instanceof FormData;
 }
 
+// 2. Core Request Function
 async function request<T>(
   url: string,
   { method = "GET", body, headers }: FetchOptions = {}
 ): Promise<T> {
   const finalHeaders: Record<string, string> = { ...(headers ?? {}) };
-
   let finalBody: BodyInit | undefined = undefined;
 
   if (body !== undefined && body !== null) {
@@ -29,9 +33,10 @@ async function request<T>(
     }
   }
 
+  // Use the absolute URL provided by the clients below
   const res = await fetch(url, {
     method,
-    credentials: "include", // 🔑 JWT cookie
+    credentials: "include", // 🔑 CRITICAL: Sends/receives HttpOnly cookies
     headers: finalHeaders,
     body: finalBody,
   });
@@ -57,44 +62,50 @@ async function request<T>(
   return data as T;
 }
 
-function createClient(defaultHeaders?: Record<string, string>) {
+// 3. Client Factory (Pre-appends the correct Base URL)
+function createClient(baseUrl: string, defaultHeaders?: Record<string, string>) {
   return {
     get: <T>(url: string, headers?: Record<string, string>) =>
-      request<T>(url, {
+      request<T>(`${baseUrl}${url}`, {
         method: "GET",
         headers: { ...(defaultHeaders ?? {}), ...(headers ?? {}) },
       }),
 
     post: <T>(url: string, body?: any, headers?: Record<string, string>) =>
-      request<T>(url, {
+      request<T>(`${baseUrl}${url}`, {
         method: "POST",
         body,
         headers: { ...(defaultHeaders ?? {}), ...(headers ?? {}) },
       }),
 
     patch: <T>(url: string, body?: any, headers?: Record<string, string>) =>
-      request<T>(url, {
+      request<T>(`${baseUrl}${url}`, {
         method: "PATCH",
         body,
         headers: { ...(defaultHeaders ?? {}), ...(headers ?? {}) },
       }),
 
     put: <T>(url: string, body?: any, headers?: Record<string, string>) =>
-      request<T>(url, {
+      request<T>(`${baseUrl}${url}`, {
         method: "PUT",
         body,
         headers: { ...(defaultHeaders ?? {}), ...(headers ?? {}) },
       }),
 
     delete: <T>(url: string, headers?: Record<string, string>) =>
-      request<T>(url, {
+      request<T>(`${baseUrl}${url}`, {
         method: "DELETE",
         headers: { ...(defaultHeaders ?? {}), ...(headers ?? {}) },
       }),
   };
 }
 
-// ✅ SVI koriste proxy
-export const authHttp = createClient();
-export const quizHttp = createClient();
-export const serverHttp = createClient();
+// 4. ✅ EXPORTS: Each client now knows exactly which port to talk to
+// authHttp -> Port 5000
+export const authHttp = createClient(AUTH_BASE);
+
+// quizHttp -> Port 5001
+export const quizHttp = createClient(QUIZ_BASE);
+
+// serverHttp usually refers to the main auth/user server
+export const serverHttp = authHttp;

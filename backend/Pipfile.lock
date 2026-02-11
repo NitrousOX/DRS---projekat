@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "52c790cd41198cde43346d4fbbab61ebe6909c4d1142886df3466f319dea669c"
+            "sha256": "0883b4adfaa8e25f1d31905bf1ff5e1a2acd41742d0081fe1bcd70961c572982"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -740,6 +740,15 @@
             ],
             "markers": "python_version >= '3.8'",
             "version": "==5.16.0"
+        },
+        "redis": {
+            "hashes": [
+                "sha256:a2814b2bda15b39dad11391cc48edac4697214a8a5a4bd10abe936ab4892eb43",
+                "sha256:f77817f16071c2950492c67d40b771fa493eb3fccc630a424a10976dbb794b7a"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.10'",
+            "version": "==7.1.1"
         },
         "reportlab": {
             "hashes": [
