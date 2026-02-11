@@ -4,7 +4,6 @@ import { useToast } from "../../components/common/toast/ToastProvider";
 import Modal from "../../components/common/ui/Modal";
 import Spinner from "../../components/common/ui/Spinner";
 
-// Mapping of question_id -> array of selected answer_ids
 type AnswerState = Record<number, number[]>;
 
 interface QuizData {
@@ -44,13 +43,16 @@ export default function QuizPlay() {
   const didAutoSubmitRef = useRef(false);
   const dangerTime = timeLeft <= 10 && timeLeft > 0;
 
-  // 1. Fetch Quiz Data
   useEffect(() => {
     async function fetchQuiz() {
       if (!id) return;
       try {
         setLoading(true);
-        const response = await fetch(`http://127.0.0.1:5000/api/quizzes/${id}/full`);
+        // Use relative path to leverage the proxy and send cookies
+        const response = await fetch(`/api/quizzes/${id}/full`, {
+          credentials: "include"
+        });
+
         if (!response.ok) throw new Error(`Greška: ${response.status}`);
 
         const data: QuizData = await response.json();
@@ -58,7 +60,7 @@ export default function QuizPlay() {
         setTimeLeft(data.duration_seconds);
         setAnswers({});
         didAutoSubmitRef.current = false;
-      } catch (err) {
+      } catch (err: any) {
         toast.error("Nije moguće učitati kviz.", "Greška");
       } finally {
         setLoading(false);
@@ -67,48 +69,10 @@ export default function QuizPlay() {
     fetchQuiz();
   }, [id, toast]);
 
-  // 2. Timer Logic
-  useEffect(() => {
-    if (!quiz || submitting || loading) return;
-
-    if (timeLeft <= 0) {
-      if (!didAutoSubmitRef.current) {
-        didAutoSubmitRef.current = true;
-        toast.info("Vreme je isteklo — šaljem kviz automatski.", "Vreme isteklo");
-        void submit(true);
-      }
-      return;
-    }
-
-    const t = window.setInterval(() => setTimeLeft((x) => x - 1), 1000);
-    return () => window.clearInterval(t);
-  }, [timeLeft, quiz, submitting, loading]);
-
-  const totalQuestions = quiz?.questions.length ?? 0;
-
-  const answeredCount = useMemo(() => {
-    if (!quiz) return 0;
-    return quiz.questions.filter(q => (answers[q.id]?.length ?? 0) > 0).length;
-  }, [answers, quiz]);
-
-  // 3. Toggle selection (Multi-choice by default)
-  function toggleAnswer(questionId: number, answerId: number) {
-    setAnswers((prev) => {
-      const current = prev[questionId] ?? [];
-      const exists = current.includes(answerId);
-      const next = exists
-        ? current.filter((id) => id !== answerId)
-        : [...current, answerId];
-
-      return { ...prev, [questionId]: next };
-    });
-  }
-
-  // 4. Submit to Flask
-  async function submit(auto = false) {
+  // 2. Submit Function - Defined BEFORE useEffect to avoid dependency issues
+  const submit = async (auto = false) => {
     if (!quiz || submitting) return;
 
-    // 1. Check if the user has answered anything
     const hasAnswers = Object.values(answers).some((arr) => arr.length > 0);
     if (!auto && !hasAnswers) {
       toast.error("Označi bar jedan odgovor pre slanja.", "Nema odgovora");
@@ -117,38 +81,30 @@ export default function QuizPlay() {
 
     setSubmitting(true);
 
-    // 2. Format answers for the Backend mapping
     const formattedAnswers = Object.entries(answers).map(([qId, aIds]) => ({
       question_id: parseInt(qId),
       answer_ids: aIds
     }));
 
     try {
-      // 3. Use the PROXY path (without http://127.0.0.1:5000) 
-      // This allows the browser to send cookies automatically.
       const response = await fetch(`/api/quizzes/${quiz.id}/process`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        // IMPORTANT: This tells fetch to include your HttpOnly JWT cookie
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           time_spent_seconds: Math.max(0, quiz.duration_seconds - timeLeft),
           answers: formattedAnswers
-          // user_id and email are REMOVED - the backend gets them from the JWT
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.msg || "Server error");
+        throw new Error(errorData.error || errorData.msg || "Server error");
       }
 
       const result = await response.json();
       const attemptId = uid();
 
-      // 4. Save results to localStorage for the next page
       localStorage.setItem(`attempt:${attemptId}`, JSON.stringify({
         ...result,
         quizTitle: quiz.title,
@@ -158,14 +114,47 @@ export default function QuizPlay() {
       toast.success("Kviz uspešno završen!");
       navigate(`/results/${attemptId}`, { replace: true });
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Submit error:", err);
       toast.error(err.message || "Greška pri slanju na server.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  useEffect(() => {
+    if (!quiz || submitting || loading) return;
+
+    if (timeLeft <= 0) {
+      if (!didAutoSubmitRef.current) {
+        didAutoSubmitRef.current = true;
+        toast.info("Vreme je isteklo — šaljem kviz automatski.", "Vreme isteklo");
+        submit(true);
+      }
+      return;
+    }
+
+    const t = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
+    return () => clearInterval(t);
+  }, [timeLeft, quiz, submitting, loading, toast]); // Removed 'submit' from deps to prevent loop
+
+  const totalQuestions = quiz?.questions.length ?? 0;
+  const answeredCount = useMemo(() => {
+    if (!quiz) return 0;
+    return quiz.questions.filter(q => (answers[q.id]?.length ?? 0) > 0).length;
+  }, [answers, quiz]);
+
+  function toggleAnswer(questionId: number, answerId: number) {
+    setAnswers((prev) => {
+      const current = prev[questionId] ?? [];
+      const isAlreadySelected = current.includes(answerId);
+      const next = isAlreadySelected ? [] : [answerId];
+
+      return { ...prev, [questionId]: next };
+    });
   }
 
+  // --- Rendering remains mostly the same, just adding type safety ---
   if (loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh" }}>
@@ -179,7 +168,6 @@ export default function QuizPlay() {
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
-      {/* Header Sticky Bar logic can be added here if desired */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 30, gap: 20 }}>
         <div>
           <h1 style={{ fontSize: 32, marginBottom: 4 }}>{quiz.title}</h1>
@@ -218,6 +206,7 @@ export default function QuizPlay() {
                 return (
                   <button
                     key={a.id}
+                    type="button"
                     onClick={() => toggleAnswer(q.id, a.id)}
                     style={{
                       textAlign: "left",

@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
 from services.quiz_service import QuizService
+from services.mail_service import send_results_email, send_pdf_email
+from services.pdf_service import build_quiz_report_pdf
 from models.quiz import Question, Answer, QuizResult, Quiz
 from repo.quiz_repo import QuizRepository
 from utils.decorators import admin_required
@@ -178,6 +180,14 @@ def process_quiz(quiz_id: int):
         score=int(score),
         time_spent_seconds=int(time_spent_seconds)
     )
+
+    send_results_email(
+        to_email=user_email,
+        quiz_id=quiz_id,
+        score=result.score,
+        max_score=max_score,
+        time_spent_seconds=time_spent_seconds
+    )
     
     try:
         db.session.add(result)
@@ -191,7 +201,8 @@ def process_quiz(quiz_id: int):
         "score": int(score),
         "max_score": int(max_score),
         "correct_count": correct_count,
-        "total_questions": len(questions)
+        "total_questions": len(questions),
+        "time_spent_seconds": time_spent_seconds
     }), 200
 
 @quiz_bp.route("/quizzes/<int:quiz_id>/leaderboard", methods=["GET"])
@@ -212,4 +223,56 @@ def quiz_leaderboard(quiz_id: int):
     return jsonify({
         "quiz_id": quiz_id,
         "results": payload
+    }), 200
+
+
+@quiz_bp.route("/quizzes/<int:quiz_id>/send-report", methods=["POST"])
+@jwt_required()
+def send_quiz_report(quiz_id: int):
+
+    claims = get_jwt()
+    user_email = claims.get("email")
+    
+    if not user_email:
+        return jsonify({"error": "User email not found in token"}), 400
+
+    try:
+        results = QuizRepository.get_leaderboard_for_quiz(quiz_id, limit=20)
+        
+
+        leaderboard_data = {
+            "quiz_id": quiz_id,
+            "results": [
+                {
+                    "user_email": r.user_email,
+                    "score": r.score,
+                    "time_spent_seconds": r.time_spent_seconds,
+                    "completed_at": r.completed_at.isoformat() if r.completed_at else None
+                } for r in results
+            ]
+        }
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch leaderboard: {str(e)}"}), 500
+
+    try:
+        pdf_bytes = build_quiz_report_pdf(quiz_id, leaderboard_data)
+    except Exception as e:
+        return jsonify({"error": f"Failed to generate PDF: {str(e)}"}), 500
+
+    # 4. Send the Email
+    subject = f"Izveštaj o rezultatima - Kviz #{quiz_id}"
+    body = f"U prilogu se nalazi PDF izveštaj sa najboljim rezultatima za kviz {quiz_id}."
+    filename = f"quiz_{quiz_id}_report.pdf"
+
+    send_pdf_email(
+        to_email=user_email,
+        subject=subject,
+        body=body,
+        filename=filename,
+        pdf_bytes=pdf_bytes
+    )
+
+    return jsonify({
+        "message": "Report has been generated and sent to your email.",
+        "recipient": user_email
     }), 200
