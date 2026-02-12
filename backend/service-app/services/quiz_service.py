@@ -122,4 +122,27 @@ class QuizService:
             db.session.rollback()
             raise e
 
-            
+    @staticmethod
+    def update_quiz(quiz_id, data):
+        quiz = QuizRepository.get_quiz_by_id(quiz_id)
+        if not quiz:
+            raise ValueError("Quiz not found")
+
+        # Update fields
+        if "title" in data:
+            quiz.title = data["title"]
+        if "description" in data:
+            quiz.description = data["description"]
+        if "duration_seconds" in data:
+            quiz.duration_seconds = int(data["duration_seconds"])
+
+        db.session.commit()
+        return quiz
+
+    @staticmethod
+    def get_rejected_quizzes_by_author(author_id: int):
+        """Fetches all quizzes for a specific author that have been REJECTED."""
+        return Quiz.query.filter_by(
+            author_id=author_id, 
+            status=QuizStatus.REJECTED
+        ).all()

@@ -17,6 +17,8 @@ import QuizReview from "./pages/admin/QuizReview";
 
 // Moderator
 import QuizCreate from "./pages/moderator/QuizCreate";
+import DeniedQuizzes from "./pages/moderator/deniedQuizzes.tsx";
+import QuizEditDetails from "./pages/moderator/QuizEditDetails.tsx";
 
 // Quizzes
 import QuizList from "./pages/quizzes/QuizList";
@@ -59,6 +61,8 @@ export default function App() {
 
             {/* MODERATOR ROUTES */}
             <Route path="/moderator/create" element={<QuizCreate />} />
+            <Route path="/moderator/denied" element={<DeniedQuizzes />} />
+            <Route path="/moderator/edit/:id" element={<QuizEditDetails />} />
 
             {/* ADMIN ROUTES */}
             <Route path="/admin/users" element={<UsersAdmin />} />

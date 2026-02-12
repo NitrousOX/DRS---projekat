@@ -63,7 +63,7 @@ export default function AppLayout() {
             gap: 12,
           }}
         >
-          {/* леви део (logo + naslov) */}
+          {/* Леви део (logo + naslov) */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div
               style={{
@@ -89,7 +89,7 @@ export default function AppLayout() {
             </div>
           </div>
 
-          {/* десни део (nav + user + logout) */}
+          {/* Десни део (nav + user + logout) */}
           <div
             style={{
               display: "flex",
@@ -101,18 +101,19 @@ export default function AppLayout() {
           >
             <nav style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <LinkItem to="/quizzes" label="Quizzes" />
-
               <LinkItem to="/leaderboard" label="Leaderboard" />
-
-              {/* ✅ svi ulogovani vide Profile */}
               <LinkItem to="/profile" label="Profile" />
 
-              {/* MODERATOR */}
+              {/* MODERATOR / AUTHOR ACTIONS */}
               {role && canSee(role, "moderator") && (
-                <LinkItem to="/moderator/create" label="Create Quiz" />
+                <>
+                  <LinkItem to="/moderator/create" label="Create Quiz" />
+                  {/* ✅ Added Denied Quizzes for Moderators/Admins */}
+                  <LinkItem to="/moderator/denied" label="Denied Quizzes" />
+                </>
               )}
 
-              {/* ADMIN */}
+              {/* ADMIN ACTIONS */}
               {role && canSee(role, "admin") && (
                 <>
                   <LinkItem to="/admin/users" label="Users" />

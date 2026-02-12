@@ -276,3 +276,61 @@ def send_quiz_report(quiz_id: int):
         "message": "Report has been generated and sent to your email.",
         "recipient": user_email
     }), 200
+
+
+@quiz_bp.route("/quizzes/<int:quiz_id>", methods=["DELETE"])
+@jwt_required()
+def delete_quiz(quiz_id: int):
+    try:
+        QuizService.delete_quiz(quiz_id)
+        return jsonify({
+            "message": f"Quiz {quiz_id} and all related data have been deleted.",
+            "id": quiz_id
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": "An internal error occurred during deletion"}), 500
+
+@quiz_bp.route("/quizzes/my-rejected", methods=["GET"])
+@jwt_required()
+def get_my_rejected_quizzes():
+    """
+    Returns a list of rejected quizzes belonging to the current user.
+    """
+    current_user_id = get_jwt_identity()
+    
+    try:
+        rejected_quizzes = QuizService.get_rejected_quizzes_by_author(current_user_id)
+        
+        # We use include_questions=False for the list view to keep the payload light
+        return jsonify([
+            q.to_dict(include_questions=False) for q in rejected_quizzes
+        ]), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch rejected quizzes: {str(e)}"}), 500
+
+
+@quiz_bp.route("/quizzes/<int:quiz_id>", methods=["PUT"])
+@jwt_required()
+def update_quiz(quiz_id: int):
+    data = request.get_json() or {}
+    current_user_id = get_jwt_identity()
+
+    quiz = Quiz.query.get(quiz_id)
+    if not quiz:
+        return jsonify({"error": "Quiz not found"}), 404
+    
+    if str(quiz.author_id) != str(current_user_id):
+        return jsonify({"error": "You can only edit your own quizzes"}), 403
+
+    try:
+        updated_quiz = QuizService.update_quiz(quiz_id, data)
+        return jsonify({
+            "message": "Quiz details updated",
+            "quiz": updated_quiz.to_dict(include_questions=False)
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": "An internal error occurred"}), 500
