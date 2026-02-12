@@ -160,11 +160,20 @@ export default function QuizPlay() {
 
   function toggleAnswer(questionId: number, answerId: number) {
     setAnswers((prev) => {
-      const current = prev[questionId] ?? [];
-      const isAlreadySelected = current.includes(answerId);
-      // Toggle logic: allows only one selection or unselection
-      const next = isAlreadySelected ? [] : [answerId];
-      return { ...prev, [questionId]: next };
+      const currentSelected = prev[questionId] ?? [];
+      const isAlreadySelected = currentSelected.includes(answerId);
+
+      let nextSelected: number[];
+
+      if (isAlreadySelected) {
+        // Ako je već izabran, ukloni ga (unselect)
+        nextSelected = currentSelected.filter((id) => id !== answerId);
+      } else {
+        // Ako nije izabran, dodaj ga u niz (multiple choice)
+        nextSelected = [...currentSelected, answerId];
+      }
+
+      return { ...prev, [questionId]: nextSelected };
     });
   }
 
