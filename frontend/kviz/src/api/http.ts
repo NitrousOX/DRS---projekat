@@ -2,7 +2,7 @@
 
 // 1. Define Base URLs from Environment Variables (with fallbacks for local dev)
 const AUTH_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-const QUIZ_BASE = import.meta.env.VITE_SERVICE_API_URL || "http://localhost:5001";
+const QUIZ_BASE = import.meta.env.VITE_API_SERVICE_URL || "http://localhost:5001";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 

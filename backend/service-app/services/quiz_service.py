@@ -108,5 +108,18 @@ class QuizService:
         db.session.commit()
         return quiz
 
+    @staticmethod
+    def delete_quiz(quiz_id: int):
+        quiz = Quiz.query.get(quiz_id)
+        if not quiz:
+            raise ValueError("Quiz not found")
 
-        
+        try:
+            db.session.delete(quiz)
+            db.session.commit()
+            return True
+        except Exception as e:
+            db.session.rollback()
+            raise e
+
+            

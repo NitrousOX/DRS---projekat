@@ -4,6 +4,8 @@ import { useToast } from "../../components/common/toast/ToastProvider";
 import Modal from "../../components/common/ui/Modal";
 import Spinner from "../../components/common/ui/Spinner";
 
+// --- TYPES ---
+
 type AnswerState = Record<number, number[]>;
 
 interface QuizData {
@@ -18,6 +20,8 @@ interface QuizData {
   }>;
 }
 
+// --- HELPERS ---
+
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -28,10 +32,15 @@ function uid() {
   return crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
 }
 
+// --- COMPONENT ---
+
 export default function QuizPlay() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
+
+  // Environment variable for the API
+  const API_BASE = import.meta.env.VITE_API_SERVICE_URL || "";
 
   const [quiz, setQuiz] = useState<QuizData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,13 +52,15 @@ export default function QuizPlay() {
   const didAutoSubmitRef = useRef(false);
   const dangerTime = timeLeft <= 10 && timeLeft > 0;
 
+  // 1. Fetch Quiz Data
   useEffect(() => {
     async function fetchQuiz() {
       if (!id) return;
       try {
         setLoading(true);
-        // Use relative path to leverage the proxy and send cookies
-        const response = await fetch(`/api/quizzes/${id}/full`, {
+
+        // Using explicit VITE_API_SERVICE_URL
+        const response = await fetch(`${API_BASE}/api/quizzes/${id}/full`, {
           credentials: "include"
         });
 
@@ -61,15 +72,16 @@ export default function QuizPlay() {
         setAnswers({});
         didAutoSubmitRef.current = false;
       } catch (err: any) {
+        console.error("Fetch error:", err);
         toast.error("Nije moguće učitati kviz.", "Greška");
       } finally {
         setLoading(false);
       }
     }
     fetchQuiz();
-  }, [id, toast]);
+  }, [id, toast, API_BASE]);
 
-  // 2. Submit Function - Defined BEFORE useEffect to avoid dependency issues
+  // 2. Submit Logic
   const submit = async (auto = false) => {
     if (!quiz || submitting) return;
 
@@ -87,7 +99,8 @@ export default function QuizPlay() {
     }));
 
     try {
-      const response = await fetch(`/api/quizzes/${quiz.id}/process`, {
+      // Using explicit VITE_API_SERVICE_URL
+      const response = await fetch(`${API_BASE}/api/quizzes/${quiz.id}/process`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -122,6 +135,7 @@ export default function QuizPlay() {
     }
   };
 
+  // 3. Timer Logic
   useEffect(() => {
     if (!quiz || submitting || loading) return;
 
@@ -136,7 +150,7 @@ export default function QuizPlay() {
 
     const t = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
     return () => clearInterval(t);
-  }, [timeLeft, quiz, submitting, loading, toast]); // Removed 'submit' from deps to prevent loop
+  }, [timeLeft, quiz, submitting, loading, toast]);
 
   const totalQuestions = quiz?.questions.length ?? 0;
   const answeredCount = useMemo(() => {
@@ -148,18 +162,17 @@ export default function QuizPlay() {
     setAnswers((prev) => {
       const current = prev[questionId] ?? [];
       const isAlreadySelected = current.includes(answerId);
+      // Toggle logic: allows only one selection or unselection
       const next = isAlreadySelected ? [] : [answerId];
-
       return { ...prev, [questionId]: next };
     });
   }
 
-  // --- Rendering remains mostly the same, just adding type safety ---
   if (loading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh" }}>
+      <div className="flex flex-col items-center justify-center h-[60vh]">
         <Spinner size={44} />
-        <p style={{ marginTop: 16, opacity: 0.6 }}>Priprema pitanja...</p>
+        <p className="mt-4 opacity-60">Priprema pitanja...</p>
       </div>
     );
   }
@@ -167,40 +180,33 @@ export default function QuizPlay() {
   if (!quiz) return null;
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 30, gap: 20 }}>
+    <div className="max-w-[900px] mx-auto px-4 py-6">
+      <div className="flex justify-between items-end mb-8 gap-5">
         <div>
-          <h1 style={{ fontSize: 32, marginBottom: 4 }}>{quiz.title}</h1>
-          <p style={{ opacity: 0.6 }}>Pitanja: {answeredCount} / {totalQuestions}</p>
+          <h1 className="text-3xl font-bold mb-1">{quiz.title}</h1>
+          <p className="opacity-60 text-sm font-medium tracking-wide">
+            Pitanja: {answeredCount} / {totalQuestions}
+          </p>
         </div>
 
-        <div style={{
-          background: dangerTime ? "rgba(255,77,79,0.1)" : "rgba(255,255,255,0.03)",
-          border: `1px solid ${dangerTime ? "#ff4d4f" : "rgba(255,255,255,0.1)"}`,
-          padding: "12px 20px",
-          borderRadius: 16,
-          minWidth: 120,
-          textAlign: "center"
-        }}>
-          <div style={{ fontSize: 12, opacity: 0.5, textTransform: "uppercase", letterSpacing: 1 }}>Tajmer</div>
-          <div style={{ fontSize: 24, fontWeight: 900, color: dangerTime ? "#ff4d4f" : "inherit" }}>
+        <div className={`
+          ${dangerTime ? "bg-red-500/10 border-red-500" : "bg-white/5 border-white/10"}
+          border px-5 py-3 rounded-2xl min-w-[120px] text-center transition-colors
+        `}>
+          <div className="text-[10px] opacity-50 uppercase tracking-widest mb-1 font-bold">Tajmer</div>
+          <div className={`text-2xl font-black ${dangerTime ? "text-red-500" : "text-white"}`}>
             {formatTime(timeLeft)}
           </div>
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div className="flex flex-col gap-6">
         {quiz.questions.map((q, idx) => (
-          <div key={q.id} style={{
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            padding: 24,
-            borderRadius: 20
-          }}>
-            <h3 style={{ fontSize: 18, marginBottom: 8 }}>{idx + 1}. {q.text}</h3>
-            <p style={{ fontSize: 13, opacity: 0.5, marginBottom: 20 }}>Bodovi: {q.points}</p>
+          <div key={q.id} className="bg-white/[0.02] border border-white/[0.08] p-6 rounded-3xl">
+            <h3 className="text-lg font-bold mb-2">{idx + 1}. {q.text}</h3>
+            <p className="text-xs opacity-50 mb-5 font-black uppercase tracking-wider">Bodovi: {q.points}</p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div className="flex flex-col gap-3">
               {q.answers.map((a) => {
                 const selected = (answers[q.id] ?? []).includes(a.id);
                 return (
@@ -208,17 +214,12 @@ export default function QuizPlay() {
                     key={a.id}
                     type="button"
                     onClick={() => toggleAnswer(q.id, a.id)}
-                    style={{
-                      textAlign: "left",
-                      padding: "16px 20px",
-                      borderRadius: 14,
-                      cursor: "pointer",
-                      fontSize: 15,
-                      transition: "all 0.2s ease",
-                      border: selected ? "1px solid #3b82f6" : "1px solid rgba(255,255,255,0.1)",
-                      background: selected ? "rgba(59,130,246,0.12)" : "rgba(255,255,255,0.02)",
-                      color: selected ? "#3b82f6" : "inherit",
-                    }}
+                    className={`
+                      text-left px-5 py-4 rounded-2xl cursor-pointer text-[15px] transition-all duration-200 border-2
+                      ${selected
+                        ? "border-blue-500 bg-blue-500/10 text-blue-400"
+                        : "border-white/5 bg-white/5 hover:bg-white/10 text-white/80"}
+                    `}
                   >
                     {a.text}
                   </button>
@@ -229,46 +230,36 @@ export default function QuizPlay() {
         ))}
       </div>
 
-      <div style={{ marginTop: 40, padding: "20px 0", borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", gap: 12 }}>
+      <div className="mt-10 py-6 border-t border-white/10 flex gap-3">
         <button
           onClick={() => setConfirmExitOpen(true)}
-          style={{ padding: "14px 24px", borderRadius: 12, background: "transparent", color: "#999", border: "1px solid #333", cursor: "pointer" }}
+          className="px-6 py-4 rounded-xl bg-transparent text-white/40 border border-white/10 font-bold hover:bg-white/5 transition-colors cursor-pointer"
         >
           Odustani
         </button>
         <button
           onClick={() => submit(false)}
           disabled={submitting}
-          style={{
-            flex: 1,
-            padding: "14px",
-            borderRadius: 12,
-            background: "#3b82f6",
-            color: "white",
-            border: "none",
-            fontWeight: 700,
-            cursor: submitting ? "not-allowed" : "pointer",
-            opacity: submitting ? 0.7 : 1
-          }}
+          className="flex-1 py-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest shadow-lg shadow-blue-900/20"
         >
           {submitting ? "Obrada odgovora..." : "Završi kviz"}
         </button>
       </div>
 
       <Modal open={confirmExitOpen} title="Napusti kviz?" onClose={() => setConfirmExitOpen(false)}>
-        <p style={{ opacity: 0.8, marginBottom: 24 }}>
+        <p className="opacity-70 mb-6 leading-relaxed">
           Tvoj trenutni rezultat neće biti sačuvan ako napustiš stranicu pre slanja.
         </p>
-        <div style={{ display: "flex", gap: 12 }}>
+        <div className="flex gap-3">
           <button
             onClick={() => navigate("/quizzes")}
-            style={{ flex: 1, padding: 12, borderRadius: 10, background: "#ff4d4f", color: "white", border: "none", cursor: "pointer" }}
+            className="flex-1 p-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold transition-colors cursor-pointer"
           >
             Napusti
           </button>
           <button
             onClick={() => setConfirmExitOpen(false)}
-            style={{ flex: 1, padding: 12, borderRadius: 10, background: "#333", color: "white", border: "none", cursor: "pointer" }}
+            className="flex-1 p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition-colors cursor-pointer"
           >
             Nastavi kviz
           </button>

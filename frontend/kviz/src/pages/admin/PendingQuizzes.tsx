@@ -1,3 +1,5 @@
+import { useState, useEffect, useMemo } from "react"; // Missing React hooks
+import { useNavigate } from "react-router-dom";
 import { io, Socket } from "socket.io-client"; // Potrebno: npm install socket.io-client
 import { quizHttp } from "../../api/http";
 
@@ -45,6 +47,7 @@ export default function PendingQuizzes() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | number | null>(null);
+  const [socketConnected, setSocketConnected] = useState(false);
 
   async function load() {
     try {
@@ -65,13 +68,20 @@ export default function PendingQuizzes() {
   useEffect(() => {
     load(); // Inicijalno učitavanje
 
-    // Povezivanje na service-app (podesi URL na tvoj backend)
     const socket: Socket = io(`${import.meta.env.VITE_API_SERVICE_URL}/admin`, {
       withCredentials: true,
       transports: ["websocket"],
     });
 
-    socket.on("connect", () => console.log("Admin Socket povezan"));
+    socket.on("connect", () => {
+      console.log("Admin Socket povezan");
+      setSocketConnected(true);
+    });
+
+    socket.on("disconnect", () => {
+      console.log("Admin Socket isključen");
+      setSocketConnected(false);
+    });
 
     socket.on("new_pending_quiz", (newQuiz: QuizListItemDto) => {
       console.log("Stigao novi kviz putem socketa:", newQuiz);
@@ -145,16 +155,26 @@ export default function PendingQuizzes() {
           </p>
         </div>
 
-        <button
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold text-xs uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50"
-        >
-          <svg className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          {loading ? "Osvežavam..." : "Osveži"}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* WebSocket Status Indicator */}
+          <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs">
+            <div className={`w-2 h-2 rounded-full ${socketConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
+            <span className={socketConnected ? 'text-green-400' : 'text-gray-400'}>
+              {socketConnected ? 'Live' : 'Spajanje...'}
+            </span>
+          </div>
+
+          <button
+            onClick={load}
+            disabled={loading}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold text-xs uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50"
+          >
+            <svg className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {loading ? "Osvežavam..." : "Osveži"}
+          </button>
+        </div>
       </header>
 
       {error && (
@@ -167,79 +187,90 @@ export default function PendingQuizzes() {
       )}
 
       <div className="grid gap-4">
-        {loading && pending.length === 0 && (
+        {loading && pending.length === 0 ? (
           <div className="py-20 text-center opacity-40 animate-pulse uppercase tracking-[0.2em] font-black text-sm">
             Skeniranje baze kvizova...
           </div>
-        )}
-
-        {!loading && !error && pending.length === 0 && (
+        ) : !error && pending.length === 0 ? (
           <div className="bg-white/5 border border-dashed border-white/10 rounded-3xl p-20 text-center backdrop-blur-sm">
             <div className="text-4xl mb-4 text-white/20">📂</div>
             <h3 className="text-xl font-bold text-white/80">Nema kvizova na čekanju</h3>
             <p className="text-white/40 text-sm mt-2">Svi podneti kvizovi su već obrađeni.</p>
+            {!socketConnected && (
+              <p className="text-yellow-400/60 text-xs mt-4 flex items-center justify-center gap-2">
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Povezivanje na live notifikacije...
+              </p>
+            )}
           </div>
-        )}
+        ) : (
+          pending.map((q) => {
+            const isBusy = actionId === q.id;
 
-        {pending.map((q) => {
-          const isBusy = actionId === q.id;
-
-          return (
-            <div
-              key={String(q.id)}
-              className={`group bg-white/5 border ${q.isNew ? 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'border-white/10'} p-6 rounded-2xl transition-all duration-300 hover:bg-white/[0.08] backdrop-blur-md flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl shadow-black/20`}
-            >
-              <div className="flex-1 cursor-pointer w-full" onClick={() => navigate(`/admin/pending/${q.id}`)}>
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-xl font-black tracking-tight group-hover:text-blue-400 transition-colors">
-                    {getTitle(q)}
-                  </h3>
-                  <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded font-black text-white/40 border border-white/5 uppercase">
-                    {q.status}
-                  </span>
-                  {q.isNew && (
-                    <span className="text-[10px] bg-blue-500 px-2 py-0.5 rounded font-black text-white animate-bounce">
-                      NOVO
+            return (
+              <div
+                key={String(q.id)}
+                className={`group bg-white/5 border ${q.isNew ? 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'border-white/10'} p-6 rounded-2xl transition-all duration-300 hover:bg-white/[0.08] backdrop-blur-md flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl shadow-black/20`}
+              >
+                <div className="flex-1 cursor-pointer w-full" onClick={() => navigate(`/admin/pending/${q.id}`)}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-xl font-black tracking-tight group-hover:text-blue-400 transition-colors">
+                      {getTitle(q)}
+                    </h3>
+                    <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded font-black text-white/40 border border-white/5 uppercase">
+                      {q.status}
                     </span>
-                  )}
+                    {q.isNew && (
+                      <span className="text-[10px] bg-blue-500 px-2 py-0.5 rounded font-black text-white animate-bounce">
+                        NOVO
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-black uppercase tracking-widest text-white/40">
+                    <span className="flex items-center gap-1.5 text-blue-400/80">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                      {getAuthorLabel(q)}
+                    </span>
+                    <span>{getQuestionsCount(q)} Pitanja</span>
+                    <span>{getDurationSeconds(q)}s Tajmer</span>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-black uppercase tracking-widest text-white/40">
-                  <span className="flex items-center gap-1.5 text-blue-400/80">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                    {getAuthorLabel(q)}
-                  </span>
-                  <span>{getQuestionsCount(q)} Pitanja</span>
-                  <span>{getDurationSeconds(q)}s Tajmer</span>
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                  <button
+                    disabled={isBusy}
+                    onClick={(e) => { e.stopPropagation(); handleApprove(q.id); }}
+                    className="flex-1 md:flex-none px-6 py-2.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white border border-emerald-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-20"
+                  >
+                    {isBusy ? "..." : "Odobri"}
+                  </button>
+
+                  <button
+                    disabled={isBusy}
+                    onClick={(e) => { e.stopPropagation(); handleReject(q.id); }}
+                    className="flex-1 md:flex-none px-6 py-2.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-20"
+                  >
+                    {isBusy ? "..." : "Odbij"}
+                  </button>
                 </div>
               </div>
-
-              <div className="flex items-center gap-3 w-full md:w-auto">
-                <button
-                  disabled={isBusy}
-                  onClick={(e) => { e.stopPropagation(); handleApprove(q.id); }}
-                  className="flex-1 md:flex-none px-6 py-2.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white border border-emerald-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-20"
-                >
-                  {isBusy ? "..." : "Odobri"}
-                </button>
-
-                <button
-                  disabled={isBusy}
-                  onClick={(e) => { e.stopPropagation(); handleReject(q.id); }}
-                  className="flex-1 md:flex-none px-6 py-2.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-20"
-                >
-                  {isBusy ? "..." : "Odbij"}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
       {!loading && pending.length > 0 && (
         <div className="mt-8 px-4 text-[10px] font-black text-white/20 uppercase tracking-[0.3em] flex justify-between border-t border-white/5 pt-6">
           <span>Stavki: {pending.length}</span>
-          <span>Admin Moderacija • Live</span>
+          <span className="flex items-center gap-2">
+            Admin Moderacija
+            <span className={`w-1 h-1 rounded-full ${socketConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
+            {socketConnected ? 'Live' : 'Offline'}
+          </span>
         </div>
       )}
     </div>
